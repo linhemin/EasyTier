@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr};
+use nix::sys::socket::SockaddrLike;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -628,6 +629,27 @@ impl Instance {
         self.listener_manager.lock().await.run().await?;
         self.peer_manager.run().await?;
 
+        // Register IPv6 delegation peer RPC server if enabled
+        if self
+            .global_ctx
+            .config
+            .get_flags()
+            .enable_ipv6_delegate_server
+        {
+            let svc = crate::ipv6_delegate::Ipv6DelegateServer::new(
+                self.get_peer_manager(),
+                self.get_global_ctx(),
+            );
+            self.peer_manager
+                .get_peer_rpc_mgr()
+                .rpc_server()
+                .registry()
+                .register(
+                    crate::proto::ipv6_delegate::Ipv6DelegateRpcServer::new(svc),
+                    "ipv6_delegate",
+                );
+        }
+
         Self::clear_nic_ctx(self.nic_ctx.clone(), self.peer_packet_receiver.clone()).await;
 
         if !self.global_ctx.config.get_flags().no_tun {
@@ -680,6 +702,94 @@ impl Instance {
             self.get_peer_manager(),
         )?);
         self.run_ip_proxy().await?;
+
+        // IPv6 delegation client: request addresses from any reachable server
+        if self
+            .global_ctx
+            .config
+            .get_flags()
+            .enable_ipv6_delegate_client
+        {
+            let peer_mgr = self.get_peer_manager();
+            let global_ctx = self.get_global_ctx();
+            tokio::spawn(async move {
+                // Try a few times until success
+                for _ in 0..5 {
+                    // pick any connected peer id to try
+                    let peers = PeerManagerRpcService::list_peers(&peer_mgr).await;
+                    for p in peers {
+                        let dst_peer_id = p.peer_id;
+                        // Build client
+                        let stub = peer_mgr
+                            .get_peer_rpc_mgr()
+                            .rpc_client()
+                            .scoped_client::<crate::proto::ipv6_delegate::Ipv6DelegateRpcClientFactory<rpc_types::controller::BaseController>>(dst_peer_id, peer_mgr.my_peer_id(), "ipv6_delegate".to_string());
+                        let req = crate::proto::ipv6_delegate::RequestDelegationRequest {
+                            requester_peer_id: peer_mgr.my_peer_id(),
+                            count: 0,
+                        };
+                        if let Ok(resp) = stub.request_delegation(Default::default(), req).await {
+                            if !resp.error.is_empty() || resp.addrs.is_empty() {
+                                continue;
+                            }
+                            // Assign addresses and add source rules (Linux)
+                            #[cfg(target_os = "linux")]
+                            {
+                                // find tun by our overlay IPv4
+                                use nix::ifaddrs::getifaddrs;
+                                let mut tun: Option<String> = None;
+                                if let Some(ipv4) = global_ctx.get_ipv4().map(|x| x.address()) {
+                                    if let Ok(addrs) = getifaddrs() {
+                                        for iface in addrs {
+                                            if let Some(a) = iface.address {
+                                                if a.family()
+                                                    == Some(nix::sys::socket::AddressFamily::Inet)
+                                                {
+                                                    let ip = a.as_sockaddr_in().unwrap().ip();
+                                                    if ip == ipv4 {
+                                                        tun = Some(iface.interface_name);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if let Some(tun) = tun {
+                                    for inet in resp.addrs.iter() {
+                                        if let Some(addr) = inet.address {
+                                            if inet.network_length == 128 {
+                                                let _ = std::process::Command::new("sh")
+                                                    .arg("-c")
+                                                    .arg(format!(
+                                                        "ip -6 addr replace {}/128 dev {}",
+                                                        <std::net::Ipv6Addr as From<_>>::from(addr),
+                                                        tun
+                                                    ))
+                                                    .status();
+                                                let _ = crate::ipv6_delegate::configure_source_policy_for_addr(&global_ctx, addr.into()).await;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            // try to add server overlay ipv6 to exit nodes list in-memory
+                            if let Some(srv) = resp.server_overlay_ipv6 {
+                                let mut exit_nodes = global_ctx.config.get_exit_nodes();
+                                let ip: std::net::IpAddr =
+                                    (<std::net::Ipv6Addr as From<_>>::from(srv)).into();
+                                if !exit_nodes.contains(&ip) {
+                                    exit_nodes.push(ip);
+                                    global_ctx.config.set_exit_nodes(exit_nodes);
+                                }
+                            }
+                            return; // done
+                        }
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                }
+            });
+        }
 
         self.udp_hole_puncher.lock().await.run().await?;
 

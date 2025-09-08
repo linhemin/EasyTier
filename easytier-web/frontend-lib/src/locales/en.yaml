@@ -130,6 +130,10 @@ disable_udp_hole_punching_help: Disable udp hole punching
 
 disable_sym_hole_punching: Disable Symmetric NAT Hole Punching
 disable_sym_hole_punching_help: Disable special hole punching handling for symmetric NAT (based on birthday attack), treat symmetric NAT as cone NAT
+ipv6_delegate_server: IPv6 Delegation Server (Linux)
+ipv6_delegate_server_help: Delegates /128s from on-link /64(s) to remote peers and installs NDP proxy and routes. Linux only for automatic NDP.
+ipv6_delegate_client: IPv6 Delegation Client
+ipv6_delegate_client_help: Requests /128(s) from an on-link delegation server. Recommend adding the server IPv6 to Exit Nodes to route outbound traffic.
 
 enable_magic_dns: Enable Magic DNS
 enable_magic_dns_help: |

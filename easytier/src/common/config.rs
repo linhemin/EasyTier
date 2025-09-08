@@ -51,6 +51,11 @@ pub fn gen_default_flags() -> Flags {
         multi_thread_count: 2,
         encryption_algorithm: "aes-gcm".to_string(),
         disable_sym_hole_punching: false,
+
+        enable_ipv6_delegate_server: false,
+        enable_ipv6_delegate_client: false,
+        ipv6_delegate_ifaces: vec![],
+        ipv6_delegate_equal_remote_count: true,
     }
 }
 

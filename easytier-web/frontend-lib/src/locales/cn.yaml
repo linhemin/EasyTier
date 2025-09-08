@@ -131,6 +131,10 @@ disable_udp_hole_punching_help: 禁用UDP打洞功能
 
 disable_sym_hole_punching: 禁用对称NAT打洞
 disable_sym_hole_punching_help: 禁用对称NAT的打洞（生日攻击），将对称NAT视为锥形NAT处理
+ipv6_delegate_server: IPv6 下发服务（Linux）
+ipv6_delegate_server_help: 从本机 on-link /64 前缀为远端节点分配 /128，并自动配置 NDP 代理与路由（仅 Linux 自动配置）。
+ipv6_delegate_client: IPv6 下发客户端
+ipv6_delegate_client_help: 向上游下发服务请求 /128。建议在“出口节点”中添加该服务器的 IPv6，以便转发出站流量。
 
 enable_magic_dns: 启用魔法DNS
 enable_magic_dns_help: |

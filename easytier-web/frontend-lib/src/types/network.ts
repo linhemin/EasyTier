@@ -53,6 +53,10 @@ export interface NetworkConfig {
   disable_udp_hole_punching?: boolean
   disable_sym_hole_punching?: boolean
 
+  // IPv6 on-link delegation (experimental)
+  ipv6_delegate_server?: boolean
+  ipv6_delegate_client?: boolean
+
   enable_relay_network_whitelist?: boolean
   relay_network_whitelist: string[]
 
@@ -124,6 +128,8 @@ export function DEFAULT_NETWORK_CONFIG(): NetworkConfig {
     disable_encryption: false,
     disable_udp_hole_punching: false,
     disable_sym_hole_punching: false,
+    ipv6_delegate_server: false,
+    ipv6_delegate_client: false,
     enable_relay_network_whitelist: false,
     relay_network_whitelist: [],
     enable_manual_routes: false,

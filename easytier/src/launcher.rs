@@ -774,6 +774,12 @@ impl NetworkConfig {
         if let Some(disable_sym_hole_punching) = self.disable_sym_hole_punching {
             flags.disable_sym_hole_punching = disable_sym_hole_punching;
         }
+        if let Some(v) = self.ipv6_delegate_server {
+            flags.enable_ipv6_delegate_server = v;
+        }
+        if let Some(v) = self.ipv6_delegate_client {
+            flags.enable_ipv6_delegate_client = v;
+        }
 
         if let Some(enable_magic_dns) = self.enable_magic_dns {
             flags.accept_dns = enable_magic_dns;
@@ -923,6 +929,8 @@ impl NetworkConfig {
         result.enable_magic_dns = Some(flags.accept_dns);
         result.mtu = Some(flags.mtu as i32);
         result.enable_private_mode = Some(flags.private_mode);
+        result.ipv6_delegate_server = Some(flags.enable_ipv6_delegate_server);
+        result.ipv6_delegate_client = Some(flags.enable_ipv6_delegate_client);
 
         if !flags.relay_network_whitelist.is_empty() && flags.relay_network_whitelist != "*" {
             result.enable_relay_network_whitelist = Some(true);

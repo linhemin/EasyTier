@@ -55,6 +55,15 @@ message FlagsInConfig {
   
   // disable symmetric nat hole punching, treat symmetric as cone when enabled
   bool disable_sym_hole_punching = 30;
+
+  // Enable IPv6 on-link delegation server (Linux only for now)
+  bool enable_ipv6_delegate_server = 31;
+  // Enable IPv6 on-link delegation client
+  bool enable_ipv6_delegate_client = 32;
+  // Optional allowlist of interface names to use for IPv6 delegation (server)
+  repeated string ipv6_delegate_ifaces = 33;
+  // If true, allocate delegated /128 per each on-link /64 owned locally (peer gets the same count)
+  bool ipv6_delegate_equal_remote_count = 34;
 }
 
 message RpcDescriptor {

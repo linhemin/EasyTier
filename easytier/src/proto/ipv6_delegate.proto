@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+import "common.proto";
+
+package ipv6_delegate;
+
+message RequestDelegationRequest {
+  // requester peer id for stable allocation
+  uint32 requester_peer_id = 1;
+  // desired count (0 means equal to server on-link /64 count)
+  uint32 count = 2;
+}
+
+message RequestDelegationResponse {
+  repeated common.Ipv6Inet addrs = 1;
+  string error = 2;
+  // server's IPv6 address to use as exit-node identifier (overlay IPv6)
+  optional common.Ipv6Addr server_overlay_ipv6 = 3;
+}
+
+service Ipv6DelegateRpc {
+  rpc RequestDelegation(RequestDelegationRequest) returns (RequestDelegationResponse);
+}

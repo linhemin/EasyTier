@@ -5,6 +5,7 @@ pub mod acl;
 pub mod cli;
 pub mod common;
 pub mod error;
+pub mod ipv6_delegate;
 pub mod magic_dns;
 pub mod peer_rpc;
 pub mod web;

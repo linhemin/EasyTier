@@ -14,6 +14,7 @@ mod vpn_portal;
 pub mod common;
 pub mod connector;
 pub mod instance_manager;
+pub mod ipv6_delegate;
 pub mod launcher;
 pub mod peers;
 pub mod proto;

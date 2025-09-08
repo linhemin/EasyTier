@@ -168,6 +168,8 @@ const bool_flags: BoolFlag[] = [
   { field: 'disable_sym_hole_punching', help: 'disable_sym_hole_punching_help' },
   { field: 'enable_magic_dns', help: 'enable_magic_dns_help' },
   { field: 'enable_private_mode', help: 'enable_private_mode_help' },
+  { field: 'ipv6_delegate_server', help: 'ipv6_delegate_server_help' },
+  { field: 'ipv6_delegate_client', help: 'ipv6_delegate_client_help' },
 ]
 
 const portForwardProtocolOptions = ref(["tcp","udp"]);
