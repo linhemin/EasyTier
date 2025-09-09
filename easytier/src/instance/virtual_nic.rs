@@ -936,6 +936,14 @@ impl NicCtx {
                     new_set.insert(ipv6);
                 }
 
+                // Also make the gateway's own TUN IPv6 reachable on-link via NDP proxy
+                if let Some(my_v6) = global_ctx.get_ipv6() {
+                    // Only include if inside the on-link prefix, to avoid proxying unrelated addresses
+                    if prefix.contains(&my_v6.address()) {
+                        new_set.insert(my_v6.address());
+                    }
+                }
+
                 // diff and apply
                 let mut applied_guard = applied_clone.lock().await;
                 // removals
