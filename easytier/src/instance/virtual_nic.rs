@@ -1024,14 +1024,20 @@ impl NicCtx {
     }
 
     async fn run_ipv6_default_route_updater(&mut self) -> Result<(), Error> {
-        // For non-gateway nodes (no upstream iface set) but on-link allocator is enabled,
-        // add a default IPv6 route via the TUN interface to send IPv6 Internet traffic over EasyTier.
+        // For non-gateway nodes, add a default IPv6 route via the TUN interface
+        // to send IPv6 Internet traffic over EasyTier when either:
+        // - IPv6 on-link allocator is enabled (mesh-managed IPv6), or
+        // - Exit nodes are configured (use peers as IPv6 egress).
         let global_ctx = self.global_ctx.clone();
-        if !global_ctx.config.get_enable_ipv6_onlink_allocator() {
+        let allocator_enabled = global_ctx.config.get_enable_ipv6_onlink_allocator();
+        let has_exit_nodes = !global_ctx.config.get_exit_nodes().is_empty();
+        if !allocator_enabled && !has_exit_nodes {
             return Ok(());
         }
-        if global_ctx.config.get_ipv6_onlink_iface().is_some() {
-            // gateway node, skip adding default route on gateway
+        // gateway node: only skip when allocator is driving the gateway; for exit-node
+        // case this function still only runs on non-gateway nodes (since they won't
+        // have ipv6_onlink_iface set).
+        if allocator_enabled && global_ctx.config.get_ipv6_onlink_iface().is_some() {
             return Ok(());
         }
 
@@ -1051,6 +1057,46 @@ impl NicCtx {
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             }
         });
+
+        Ok(())
+    }
+
+    async fn run_ipv6_exit_node_forwarding(&mut self) -> Result<(), Error> {
+        // Prepare system IPv6 forwarding and NAT66 on Linux when this node acts as an exit node.
+        // This is independent of the on-link allocator feature and helps IPv6 Internet/LAN egress.
+        if !self.global_ctx.enable_exit_node() {
+            return Ok(());
+        }
+
+        let nic = self.nic.lock().await;
+        let tun_ifname = nic.ifname().to_owned();
+        drop(nic);
+
+        #[cfg(target_os = "linux")]
+        {
+            let _ = ifcfg::run_shell_cmd("sysctl -w net.ipv6.conf.all.forwarding=1").await;
+            // Detect default IPv6 egress interface and set FORWARD/NAT66 rules/best effort.
+            // Use shell substitution to avoid parsing in Rust.
+            let cmd = format!(
+                "WAN=$(ip -6 route show default | awk '{{for(i=1;i<=NF;i++) if ($i==\"dev\") {{print $(i+1); exit}}}}'); \
+                 if [ -n \"$WAN\" ]; then \
+                   ip6tables -C FORWARD -i {} -o $WAN -j ACCEPT || ip6tables -I FORWARD -i {} -o $WAN -j ACCEPT; \
+                   ip6tables -C FORWARD -i $WAN -o {} -m state --state RELATED,ESTABLISHED -j ACCEPT || ip6tables -I FORWARD -i $WAN -o {} -m state --state RELATED,ESTABLISHED -j ACCEPT; \
+                   ip6tables -t nat -C POSTROUTING -o $WAN -j MASQUERADE || ip6tables -t nat -A POSTROUTING -o $WAN -j MASQUERADE; \
+                 else \
+                   # Fallback: MASQUERADE everything not going out via TUN (broad, but functional)
+                   ip6tables -t nat -C POSTROUTING ! -o {} -j MASQUERADE || ip6tables -t nat -A POSTROUTING ! -o {} -j MASQUERADE; \
+                 fi",
+                tun_ifname, tun_ifname, tun_ifname, tun_ifname, tun_ifname, tun_ifname
+            );
+            let _ = ifcfg::run_shell_cmd(&cmd).await;
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            // Forwarding toggle only. NAT66 on macOS requires pf anchors/rules which are out of scope here.
+            let _ = ifcfg::run_shell_cmd("sysctl -w net.inet6.ip6.forwarding=1").await;
+        }
 
         Ok(())
     }
@@ -1113,6 +1159,9 @@ impl NicCtx {
 
         // Default IPv6 route on non-gateway nodes
         self.run_ipv6_default_route_updater().await?;
+
+        // If acting as IPv6 exit node, ensure system-level forwarding/NAT66 ready
+        self.run_ipv6_exit_node_forwarding().await?;
 
         Ok(())
     }

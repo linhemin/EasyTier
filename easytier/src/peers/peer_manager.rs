@@ -1108,6 +1108,19 @@ impl PeerManager {
                 }
             }
 
+            // 1b) fallback to IPv4-configured exit nodes for IPv6 egress
+            // if no IPv6 exit nodes are configured or reachable.
+            if dst_peers.is_empty() {
+                for exit_node in &self.exit_nodes {
+                    let IpAddr::V4(exit_v4) = exit_node else { continue; };
+                    if let Some(peer_id) = self.peers.get_peer_id_by_ipv4(exit_v4).await {
+                        dst_peers.push(peer_id);
+                        is_exit_node = true;
+                        break;
+                    }
+                }
+            }
+
             // 2) Prefer a connected peer that advertises IPv6 gateway capability
             if dst_peers.is_empty() && self.global_ctx.config.get_enable_ipv6_onlink_allocator() {
                 // Collect connected peers and try to find any with is_ipv6_gateway flag
