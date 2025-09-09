@@ -909,6 +909,7 @@ impl NicCtx {
 
         self.tasks.spawn(async move {
             let mut ndp_prepared = false;
+            let mut fw_prepared = false;
             loop {
                 let mut new_set = std::collections::BTreeSet::<std::net::Ipv6Addr>::new();
                 let routes = peer_mgr.list_routes().await;
@@ -969,6 +970,12 @@ impl NicCtx {
                             #[cfg(target_os = "linux")]
                             {
                                 let _ = ifcfg::run_shell_cmd(&format!("sysctl -w net.ipv6.conf.all.forwarding=1; sysctl -w net.ipv6.conf.{}.proxy_ndp=1", wan)).await;
+                                // best-effort open forwarding in firewall (iptables-nft). Ignore errors.
+                                if !fw_prepared {
+                                    let _ = ifcfg::run_shell_cmd(&format!("ip6tables -I FORWARD -i {} -o {} -j ACCEPT", tun_ifname, wan)).await;
+                                    let _ = ifcfg::run_shell_cmd(&format!("ip6tables -I FORWARD -i {} -o {} -m state --state RELATED,ESTABLISHED -j ACCEPT", wan, tun_ifname)).await;
+                                    fw_prepared = true;
+                                }
                             }
                             #[cfg(target_os = "macos")]
                             {
