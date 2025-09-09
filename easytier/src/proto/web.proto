@@ -75,6 +75,9 @@ message NetworkConfig {
     repeated PortForwardConfig port_forwards = 48;
 
     optional bool disable_sym_hole_punching = 49;
+
+    optional bool enable_ipv6_distribute = 50;
+    optional string ipv6_distribute_prefix = 51;
 }
 
 message PortForwardConfig {
