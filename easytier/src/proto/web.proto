@@ -75,6 +75,11 @@ message NetworkConfig {
     repeated PortForwardConfig port_forwards = 48;
 
     optional bool disable_sym_hole_punching = 49;
+
+    // IPv6 on-link global addressing
+    optional bool enable_ipv6_onlink_allocator = 50;
+    optional string ipv6_onlink_prefix = 51; // e.g. 2001:db8:1:2::/64
+    optional string ipv6_onlink_iface = 52;   // upstream interface for NDP proxy (gateway only)
 }
 
 message PortForwardConfig {

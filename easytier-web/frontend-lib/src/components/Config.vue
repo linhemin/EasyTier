@@ -258,6 +258,25 @@ const portForwardProtocolOptions = ref(["tcp","udp"]);
 
               <div class="flex flex-row gap-x-9 flex-wrap">
                 <div class="flex flex-col gap-2 basis-5/12 grow">
+                  <label for="onlink_toggle">IPv6 On-link Global Addressing</label>
+                  <ToggleButton id="onlink_toggle" v-model="curNetwork.enable_ipv6_onlink_allocator" on-icon="pi pi-check" off-icon="pi pi-times"
+                    :on-label="t('off_text')" :off-label="t('on_text')" class="w-48" />
+                </div>
+              </div>
+
+              <div v-if="curNetwork.enable_ipv6_onlink_allocator" class="flex flex-row gap-x-9 flex-wrap">
+                <div class="flex flex-col gap-2 basis-5/12 grow">
+                  <label for="onlink_prefix">IPv6 On-link Prefix</label>
+                  <InputText id="onlink_prefix" v-model="curNetwork.ipv6_onlink_prefix" placeholder="2001:db8:1:2::/64" />
+                </div>
+                <div class="flex flex-col gap-2 basis-5/12 grow">
+                  <label for="onlink_iface">Upstream Interface (gateway)</label>
+                  <InputText id="onlink_iface" v-model="curNetwork.ipv6_onlink_iface" placeholder="e.g., eth0 / en0 / Ethernet" />
+                </div>
+              </div>
+
+              <div class="flex flex-row gap-x-9 flex-wrap">
+                <div class="flex flex-col gap-2 basis-5/12 grow">
                   <label for="hostname">{{ t('hostname') }}</label>
                   <InputText id="hostname" v-model="curNetwork.hostname" aria-describedby="hostname-help" :format="true"
                     :placeholder="t('hostname_placeholder', [props.hostname])" />

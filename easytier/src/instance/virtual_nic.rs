@@ -34,6 +34,7 @@ use tokio::{
 };
 use tokio_util::bytes::Bytes;
 use tun::{AbstractDevice, AsyncDevice, Configuration, Layer};
+use crate::common::ifcfg as ifcfg;
 use zerocopy::{NativeEndian, NetworkEndian};
 
 #[cfg(target_os = "windows")]
@@ -881,6 +882,126 @@ impl NicCtx {
         Ok(())
     }
 
+    async fn run_ipv6_onlink_allocator(&mut self) -> Result<(), Error> {
+        let Some(peer_mgr) = self.peer_mgr.upgrade() else {
+            return Err(anyhow::anyhow!("peer manager not available").into());
+        };
+        let global_ctx = self.global_ctx.clone();
+        let net_ns = self.global_ctx.net_ns.clone();
+        let nic = self.nic.lock().await;
+        let ifcfg = nic.get_ifcfg();
+        let tun_ifname = nic.ifname().to_owned();
+        drop(nic);
+
+        // Only run if allocator is enabled and prefix provided.
+        if !global_ctx.config.get_enable_ipv6_onlink_allocator() {
+            return Ok(());
+        }
+        let Some(prefix) = global_ctx.config.get_ipv6_onlink_prefix() else {
+            return Ok(());
+        };
+
+        let my_inst_id = global_ctx.get_id().to_string();
+        let wan_iface = global_ctx.config.get_ipv6_onlink_iface();
+        // track current applied set to add/remove
+        let applied = std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::BTreeSet::<std::net::Ipv6Addr>::new()));
+        let applied_clone = applied.clone();
+
+        self.tasks.spawn(async move {
+            let mut ndp_prepared = false;
+            loop {
+                let mut new_set = std::collections::BTreeSet::<std::net::Ipv6Addr>::new();
+                let routes = peer_mgr.list_routes().await;
+                for r in routes {
+                    if r.inst_id == my_inst_id { continue; }
+                    // derive v6 from inst_id + prefix
+                    let Ok(uuid) = uuid::Uuid::parse_str(&r.inst_id) else { continue; };
+                    use std::hash::{Hash, Hasher};
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    uuid.as_u128().hash(&mut hasher);
+                    global_ctx.get_network_name().hash(&mut hasher);
+                    let h64 = hasher.finish();
+                    let pfx_len = prefix.network_length();
+                    let host_bits = 128 - pfx_len as u32;
+                    let base = prefix.first_address();
+                    let mut oct = base.octets();
+                    let mut addr_u128 = u128::from_be_bytes(oct);
+                    let mask: u128 = if host_bits == 128 { 0 } else { (!0u128) >> pfx_len };
+                    let host_part = if host_bits >= 64 {
+                        (h64 as u128) & mask
+                    } else if host_bits == 0 { 0 } else { ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask };
+                    addr_u128 = (addr_u128 & (!mask)) | host_part;
+                    let ipv6 = std::net::Ipv6Addr::from(addr_u128.to_be_bytes());
+                    new_set.insert(ipv6);
+                }
+
+                // diff and apply
+                let mut applied_guard = applied_clone.lock().await;
+                // removals
+                let removed: Vec<_> = applied_guard.difference(&new_set).cloned().collect();
+                for ip in removed.iter() {
+                    let _g = net_ns.guard();
+                    // remove route on tun
+                    let _ = ifcfg.remove_ipv6_route(&tun_ifname, *ip, 128).await;
+                    if let Some(ref wan) = wan_iface {
+                        #[cfg(target_os = "linux")]
+                        {
+                            let _ = ifcfg::run_shell_cmd(&format!("ip -6 neigh del proxy {} dev {}", ip, wan)).await;
+                        }
+                        #[cfg(target_os = "macos")]
+                        {
+                            let _ = ifcfg::run_shell_cmd(&format!("ndp -d {}", ip)).await;
+                        }
+                        #[cfg(target_os = "windows")]
+                        {
+                            let _ = ifcfg::run_shell_cmd(&format!("netsh interface ipv6 delete route {} {}", ip, wan)).await;
+                        }
+                    }
+                }
+                // additions
+                for ip in new_set.iter() {
+                    if applied_guard.contains(ip) { continue; }
+                    let _g = net_ns.guard();
+                    let _ = ifcfg.add_ipv6_route(&tun_ifname, *ip, 128, None).await;
+                    if let Some(ref wan) = wan_iface {
+                        // one-time kernel toggles per loop
+                        if !ndp_prepared {
+                            #[cfg(target_os = "linux")]
+                            {
+                                let _ = ifcfg::run_shell_cmd(&format!("sysctl -w net.ipv6.conf.all.forwarding=1; sysctl -w net.ipv6.conf.{}.proxy_ndp=1", wan)).await;
+                            }
+                            #[cfg(target_os = "macos")]
+                            {
+                                let _ = ifcfg::run_shell_cmd("sysctl -w net.inet6.ip6.forwarding=1").await;
+                            }
+                            ndp_prepared = true;
+                        }
+                        #[cfg(target_os = "linux")]
+                        {
+                            let _ = ifcfg::run_shell_cmd(&format!("ip -6 neigh replace proxy {} dev {}", ip, wan)).await;
+                        }
+                        #[cfg(target_os = "macos")]
+                        {
+                            // add proxy neighbor using interface mac
+                            let cmd = format!("ndp -s {} $(ifconfig {} | grep -m1 ether | sed -E 's/.*ether ([0-9a-f:]+).*/\\1/') proxy", ip, wan);
+                            let _ = ifcfg::run_shell_cmd(&cmd).await;
+                        }
+                        #[cfg(target_os = "windows")]
+                        {
+                            // publish a host route; on recent Windows this will announce ND for the address
+                            let _ = ifcfg::run_shell_cmd(&format!("netsh interface ipv6 add route {}/128 {} publish=yes", ip, wan)).await;
+                        }
+                    }
+                }
+                *applied_guard = new_set;
+                drop(applied_guard);
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
+        });
+
+        Ok(())
+    }
+
     pub async fn run(
         &mut self,
         ipv4_addr: Option<cidr::Ipv4Inet>,
@@ -933,6 +1054,9 @@ impl NicCtx {
         }
 
         self.run_proxy_cidrs_route_updater().await?;
+
+        // On-link IPv6 allocation and NDP proxy routing (if enabled)
+        self.run_ipv6_onlink_allocator().await?;
 
         Ok(())
     }

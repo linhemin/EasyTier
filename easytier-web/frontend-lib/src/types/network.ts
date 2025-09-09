@@ -73,6 +73,11 @@ export interface NetworkConfig {
   rpc_portal_whitelists: string[]
   
   port_forwards: PortForwardConfig[]
+
+  // IPv6 on-link allocator
+  enable_ipv6_onlink_allocator?: boolean
+  ipv6_onlink_prefix?: string
+  ipv6_onlink_iface?: string
 }
 
 export function DEFAULT_NETWORK_CONFIG(): NetworkConfig {
@@ -137,6 +142,10 @@ export function DEFAULT_NETWORK_CONFIG(): NetworkConfig {
     enable_private_mode: false,
     rpc_portal_whitelists: [],
     port_forwards: [],
+
+    enable_ipv6_onlink_allocator: false,
+    ipv6_onlink_prefix: '',
+    ipv6_onlink_iface: '',
   }
 }
 

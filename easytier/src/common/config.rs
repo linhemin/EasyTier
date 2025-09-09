@@ -146,6 +146,14 @@ pub trait ConfigLoader: Send + Sync {
     fn get_dhcp(&self) -> bool;
     fn set_dhcp(&self, dhcp: bool);
 
+    // IPv6 on-link allocator configs
+    fn get_ipv6_onlink_prefix(&self) -> Option<cidr::Ipv6Cidr>;
+    fn set_ipv6_onlink_prefix(&self, prefix: Option<cidr::Ipv6Cidr>);
+    fn get_ipv6_onlink_iface(&self) -> Option<String>;
+    fn set_ipv6_onlink_iface(&self, iface: Option<String>);
+    fn get_enable_ipv6_onlink_allocator(&self) -> bool;
+    fn set_enable_ipv6_onlink_allocator(&self, enable: bool);
+
     fn add_proxy_cidr(
         &self,
         cidr: cidr::Ipv4Cidr,
@@ -417,6 +425,11 @@ struct Config {
     udp_whitelist: Option<Vec<String>>,
     stun_servers: Option<Vec<String>>,
     stun_servers_v6: Option<Vec<String>>,
+
+    // IPv6 on-link allocator
+    ipv6_onlink_prefix: Option<String>,
+    ipv6_onlink_iface: Option<String>,
+    enable_ipv6_onlink_allocator: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -560,6 +573,39 @@ impl ConfigLoader for TomlConfigLoader {
 
     fn set_dhcp(&self, dhcp: bool) {
         self.config.lock().unwrap().dhcp = Some(dhcp);
+    }
+
+    fn get_ipv6_onlink_prefix(&self) -> Option<cidr::Ipv6Cidr> {
+        self.config
+            .lock()
+            .unwrap()
+            .ipv6_onlink_prefix
+            .as_ref()
+            .and_then(|s| s.parse().ok())
+    }
+
+    fn set_ipv6_onlink_prefix(&self, prefix: Option<cidr::Ipv6Cidr>) {
+        self.config.lock().unwrap().ipv6_onlink_prefix = prefix.map(|p| p.to_string());
+    }
+
+    fn get_ipv6_onlink_iface(&self) -> Option<String> {
+        self.config.lock().unwrap().ipv6_onlink_iface.clone()
+    }
+
+    fn set_ipv6_onlink_iface(&self, iface: Option<String>) {
+        self.config.lock().unwrap().ipv6_onlink_iface = iface;
+    }
+
+    fn get_enable_ipv6_onlink_allocator(&self) -> bool {
+        self.config
+            .lock()
+            .unwrap()
+            .enable_ipv6_onlink_allocator
+            .unwrap_or(false)
+    }
+
+    fn set_enable_ipv6_onlink_allocator(&self, enable: bool) {
+        self.config.lock().unwrap().enable_ipv6_onlink_allocator = Some(enable);
     }
 
     fn add_proxy_cidr(
