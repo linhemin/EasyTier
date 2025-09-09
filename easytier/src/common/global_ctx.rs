@@ -16,9 +16,9 @@ use crossbeam::atomic::AtomicCell;
 
 use super::{
     config::{ConfigLoader, Flags},
+    ipv6_allocator::Ipv6Allocator,
     netns::NetNS,
     network::IPCollector,
-    ipv6_allocator::Ipv6Allocator,
     stun::{StunInfoCollector, StunInfoCollectorTrait},
     PeerId,
 };
@@ -423,9 +423,32 @@ impl GlobalCtx {
     }
 
     pub fn alloc_ipv6_for_peer(&self, peer_id: PeerId) -> Option<std::net::Ipv6Addr> {
-        self.ipv6_allocator
-            .as_ref()
-            .and_then(|a| a.allocate(peer_id))
+        self.ipv6_allocator.as_ref().and_then(|a| {
+            let addr = a.allocate(peer_id)?;
+            #[cfg(target_os = "linux")]
+            {
+                use std::process::Command;
+                let dev = self.get_flags().dev_name;
+                if !dev.is_empty() {
+                    let addr_str = addr.to_string();
+                    let _guard = self.net_ns.guard();
+                    let _ = Command::new("ip")
+                        .args([
+                            "-6",
+                            "route",
+                            "replace",
+                            &format!("{}/128", addr_str),
+                            "dev",
+                            &dev,
+                        ])
+                        .status();
+                    let _ = Command::new("ip")
+                        .args(["-6", "neigh", "add", "proxy", &addr_str, "dev", &dev])
+                        .status();
+                }
+            }
+            Some(addr)
+        })
     }
 }
 

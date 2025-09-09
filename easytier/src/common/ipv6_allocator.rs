@@ -36,17 +36,6 @@ impl Ipv6Allocator {
         let addr = Ipv6Addr::from(base + *idx);
         *idx += 1;
         self.assigned.insert(peer_id, addr);
-        #[cfg(target_os = "linux")]
-        {
-            use std::process::Command;
-            let addr_str = addr.to_string();
-            let _ = Command::new("ip")
-                .args(["-6", "route", "replace", &format!("{}/128", addr_str), "dev", "lo"])
-                .status();
-            let _ = Command::new("ip")
-                .args(["-6", "neigh", "add", "proxy", &addr_str, "dev", "lo"])
-                .status();
-        }
         Some(addr)
     }
 }
