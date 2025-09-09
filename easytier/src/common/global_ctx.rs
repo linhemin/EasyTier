@@ -453,6 +453,8 @@ impl GlobalCtx {
                     #[cfg(target_os = "windows")]
                     {
                         use std::process::Command;
+                        // Install a /128 route and publish it so the host advertises
+                        // reachability for the delegated address.
                         let _ = Command::new("netsh")
                             .args([
                                 "interface",
@@ -461,10 +463,20 @@ impl GlobalCtx {
                                 "route",
                                 &format!("{}/128", addr_str),
                                 &dev,
+                                "publish=yes",
                             ])
                             .status();
+                        // Enable forwarding on the interface so Windows will answer
+                        // Neighbor Discovery requests for the published address.
                         let _ = Command::new("netsh")
-                            .args(["interface", "ipv6", "add", "proxy", &addr_str, &dev])
+                            .args([
+                                "interface",
+                                "ipv6",
+                                "set",
+                                "interface",
+                                &dev,
+                                "forwarding=enabled",
+                            ])
                             .status();
                     }
 
