@@ -978,10 +978,16 @@ impl NicCtx {
                             #[cfg(target_os = "linux")]
                             {
                                 let _ = ifcfg::run_shell_cmd(&format!("sysctl -w net.ipv6.conf.all.forwarding=1; sysctl -w net.ipv6.conf.{}.proxy_ndp=1", wan)).await;
-                                // best-effort open forwarding in firewall (iptables-nft). Ignore errors.
+                                // best-effort open forwarding and NAT66 in firewall (iptables-nft). Ignore errors.
                                 if !fw_prepared {
+                                    // Allow forwarding between TUN and upstream iface
                                     let _ = ifcfg::run_shell_cmd(&format!("ip6tables -I FORWARD -i {} -o {} -j ACCEPT", tun_ifname, wan)).await;
                                     let _ = ifcfg::run_shell_cmd(&format!("ip6tables -I FORWARD -i {} -o {} -m state --state RELATED,ESTABLISHED -j ACCEPT", wan, tun_ifname)).await;
+
+                                    // Enable NAT66 so peers with non-GUA overlay IPv6 can reach Internet and upstream LAN
+                                    // This requires the nat table to be available (nft backends usually provide it)
+                                    let _ = ifcfg::run_shell_cmd(&format!("ip6tables -t nat -C POSTROUTING -o {} -j MASQUERADE || ip6tables -t nat -A POSTROUTING -o {} -j MASQUERADE", wan, wan)).await;
+
                                     fw_prepared = true;
                                 }
                             }
