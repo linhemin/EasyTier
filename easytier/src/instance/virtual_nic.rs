@@ -1002,6 +1002,38 @@ impl NicCtx {
         Ok(())
     }
 
+    async fn run_ipv6_default_route_updater(&mut self) -> Result<(), Error> {
+        // For non-gateway nodes (no upstream iface set) but on-link allocator is enabled,
+        // add a default IPv6 route via the TUN interface to send IPv6 Internet traffic over EasyTier.
+        let global_ctx = self.global_ctx.clone();
+        if !global_ctx.config.get_enable_ipv6_onlink_allocator() {
+            return Ok(());
+        }
+        if global_ctx.config.get_ipv6_onlink_iface().is_some() {
+            // gateway node, skip adding default route on gateway
+            return Ok(());
+        }
+
+        let nic = self.nic.lock().await;
+        let ifname = nic.ifname().to_owned();
+        let ifcfg = nic.get_ifcfg();
+        let net_ns = self.global_ctx.net_ns.clone();
+        drop(nic);
+
+        self.tasks.spawn(async move {
+            loop {
+                let _g = net_ns.guard();
+                // ::/0 default route
+                let _ = ifcfg
+                    .add_ipv6_route(&ifname, std::net::Ipv6Addr::UNSPECIFIED, 0, None)
+                    .await;
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        });
+
+        Ok(())
+    }
+
     pub async fn run(
         &mut self,
         ipv4_addr: Option<cidr::Ipv4Inet>,
@@ -1057,6 +1089,9 @@ impl NicCtx {
 
         // On-link IPv6 allocation and NDP proxy routing (if enabled)
         self.run_ipv6_onlink_allocator().await?;
+
+        // Default IPv6 route on non-gateway nodes
+        self.run_ipv6_default_route_updater().await?;
 
         Ok(())
     }
