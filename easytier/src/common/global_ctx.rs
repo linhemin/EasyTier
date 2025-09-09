@@ -425,26 +425,59 @@ impl GlobalCtx {
     pub fn alloc_ipv6_for_peer(&self, peer_id: PeerId) -> Option<std::net::Ipv6Addr> {
         self.ipv6_allocator.as_ref().and_then(|a| {
             let addr = a.allocate(peer_id)?;
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
             {
-                use std::process::Command;
                 let dev = self.get_flags().dev_name;
                 if !dev.is_empty() {
                     let addr_str = addr.to_string();
-                    let _guard = self.net_ns.guard();
-                    let _ = Command::new("ip")
-                        .args([
-                            "-6",
-                            "route",
-                            "replace",
-                            &format!("{}/128", addr_str),
-                            "dev",
-                            &dev,
-                        ])
-                        .status();
-                    let _ = Command::new("ip")
-                        .args(["-6", "neigh", "add", "proxy", &addr_str, "dev", &dev])
-                        .status();
+
+                    #[cfg(target_os = "linux")]
+                    {
+                        use std::process::Command;
+                        let _guard = self.net_ns.guard();
+                        let _ = Command::new("ip")
+                            .args([
+                                "-6",
+                                "route",
+                                "replace",
+                                &format!("{}/128", addr_str),
+                                "dev",
+                                &dev,
+                            ])
+                            .status();
+                        let _ = Command::new("ip")
+                            .args(["-6", "neigh", "add", "proxy", &addr_str, "dev", &dev])
+                            .status();
+                    }
+
+                    #[cfg(target_os = "windows")]
+                    {
+                        use std::process::Command;
+                        let _ = Command::new("netsh")
+                            .args([
+                                "interface",
+                                "ipv6",
+                                "add",
+                                "route",
+                                &format!("{}/128", addr_str),
+                                &dev,
+                            ])
+                            .status();
+                        let _ = Command::new("netsh")
+                            .args(["interface", "ipv6", "add", "proxy", &addr_str, &dev])
+                            .status();
+                    }
+
+                    #[cfg(target_os = "macos")]
+                    {
+                        use std::process::Command;
+                        let _ = Command::new("route")
+                            .args(["-n", "add", "-inet6", &addr_str, "-interface", &dev])
+                            .status();
+                        let _ = Command::new("ndp")
+                            .args(["-s", &addr_str, "-iface", &dev, "-proxy"])
+                            .status();
+                    }
                 }
             }
             Some(addr)
