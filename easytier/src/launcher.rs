@@ -513,6 +513,18 @@ impl NetworkConfig {
             self.network_secret.clone().unwrap_or_default(),
         ));
 
+        if self.enable_ipv6_distribute.unwrap_or_default() {
+            if let Some(prefix) = self.ipv6_distribute_prefix.as_ref() {
+                if !prefix.is_empty() {
+                    let cidr = prefix
+                        .parse()
+                        .with_context(|| format!("failed to parse ipv6 distribute prefix: {}", prefix))?;
+                    cfg.set_enable_ipv6_assign(true);
+                    cfg.set_ipv6_assign_prefix(Some(cidr));
+                }
+            }
+        }
+
         if !cfg.get_dhcp() {
             let virtual_ipv4 = self.virtual_ipv4.clone().unwrap_or_default();
             if !virtual_ipv4.is_empty() {
@@ -878,6 +890,13 @@ impl NetworkConfig {
             result.vpn_portal_client_network_len = Some(cidr.network_length() as i32);
 
             result.vpn_portal_listen_port = Some(vpn_config.wireguard_listen.port() as i32);
+        }
+
+        if config.get_enable_ipv6_assign() {
+            result.enable_ipv6_distribute = Some(true);
+            if let Some(prefix) = config.get_ipv6_assign_prefix() {
+                result.ipv6_distribute_prefix = Some(prefix.to_string());
+            }
         }
 
         if let Some(routes) = config.get_routes() {

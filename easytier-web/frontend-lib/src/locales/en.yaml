@@ -13,6 +13,8 @@ proxy_cidrs: Subnet Proxy CIDRs
 enable_vpn_portal: Enable VPN Portal
 vpn_portal_listen_port: VPN Portal Listen Port
 vpn_portal_client_network: Client Sub Network
+enable_ipv6_distribute: Deliver IPv6 Addresses
+ipv6_distribute_prefix: IPv6 Prefix
 dev_name: TUN interface name
 advanced_settings: Advanced Settings
 basic_settings: Basic Settings

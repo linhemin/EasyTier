@@ -19,6 +19,7 @@ pub mod dns;
 pub mod error;
 pub mod global_ctx;
 pub mod ifcfg;
+pub mod ipv6_allocator;
 pub mod netns;
 pub mod network;
 pub mod scoped_task;

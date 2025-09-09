@@ -18,6 +18,7 @@ use super::{
     config::{ConfigLoader, Flags},
     netns::NetNS,
     network::IPCollector,
+    ipv6_allocator::Ipv6Allocator,
     stun::{StunInfoCollector, StunInfoCollectorTrait},
     PeerId,
 };
@@ -89,6 +90,8 @@ pub struct GlobalCtx {
     stats_manager: Arc<StatsManager>,
 
     acl_filter: Arc<AclFilter>,
+
+    ipv6_allocator: Option<Arc<Ipv6Allocator>>,
 }
 
 impl std::fmt::Debug for GlobalCtx {
@@ -140,6 +143,14 @@ impl GlobalCtx {
             ..Default::default()
         };
 
+        let ipv6_allocator = if config_fs.get_enable_ipv6_assign() {
+            config_fs
+                .get_ipv6_assign_prefix()
+                .map(|p| Arc::new(Ipv6Allocator::new(p)))
+        } else {
+            None
+        };
+
         GlobalCtx {
             inst_name: config_fs.get_inst_name(),
             id,
@@ -175,6 +186,8 @@ impl GlobalCtx {
             stats_manager: Arc::new(StatsManager::new()),
 
             acl_filter: Arc::new(AclFilter::new()),
+
+            ipv6_allocator,
         }
     }
 
@@ -407,6 +420,12 @@ impl GlobalCtx {
             .and_then(|acl| acl.acl_v1)
             .and_then(|acl_v1| acl_v1.group)
             .map_or_else(Vec::new, |group| group.declares.to_vec())
+    }
+
+    pub fn alloc_ipv6_for_peer(&self, peer_id: PeerId) -> Option<std::net::Ipv6Addr> {
+        self.ipv6_allocator
+            .as_ref()
+            .and_then(|a| a.allocate(peer_id))
     }
 }
 

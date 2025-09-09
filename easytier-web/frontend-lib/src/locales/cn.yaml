@@ -13,6 +13,8 @@ proxy_cidrs: 子网代理CIDR
 enable_vpn_portal: 启用VPN门户
 vpn_portal_listen_port: 监听端口
 vpn_portal_client_network: 客户端子网
+enable_ipv6_distribute: 下发IPv6地址
+ipv6_distribute_prefix: 下发IPv6前缀
 dev_name: TUN接口名称
 advanced_settings: 高级设置
 basic_settings: 基础设置

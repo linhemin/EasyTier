@@ -143,6 +143,12 @@ pub trait ConfigLoader: Send + Sync {
     fn get_ipv6(&self) -> Option<cidr::Ipv6Inet>;
     fn set_ipv6(&self, addr: Option<cidr::Ipv6Inet>);
 
+    fn get_enable_ipv6_assign(&self) -> bool;
+    fn set_enable_ipv6_assign(&self, enable: bool);
+
+    fn get_ipv6_assign_prefix(&self) -> Option<cidr::Ipv6Cidr>;
+    fn set_ipv6_assign_prefix(&self, prefix: Option<cidr::Ipv6Cidr>);
+
     fn get_dhcp(&self) -> bool;
     fn set_dhcp(&self, dhcp: bool);
 
@@ -400,6 +406,9 @@ struct Config {
 
     vpn_portal_config: Option<VpnPortalConfig>,
 
+    enable_ipv6_assign: Option<bool>,
+    ipv6_assign_prefix: Option<String>,
+
     routes: Option<Vec<cidr::Ipv4Cidr>>,
 
     socks5_proxy: Option<url::Url>,
@@ -552,6 +561,30 @@ impl ConfigLoader for TomlConfigLoader {
 
     fn set_ipv6(&self, addr: Option<cidr::Ipv6Inet>) {
         self.config.lock().unwrap().ipv6 = addr.map(|addr| addr.to_string());
+    }
+
+    fn get_enable_ipv6_assign(&self) -> bool {
+        self.config
+            .lock()
+            .unwrap()
+            .enable_ipv6_assign
+            .unwrap_or_default()
+    }
+
+    fn set_enable_ipv6_assign(&self, enable: bool) {
+        self.config.lock().unwrap().enable_ipv6_assign = Some(enable);
+    }
+
+    fn get_ipv6_assign_prefix(&self) -> Option<cidr::Ipv6Cidr> {
+        let locked_config = self.config.lock().unwrap();
+        locked_config
+            .ipv6_assign_prefix
+            .as_ref()
+            .and_then(|s| s.parse().ok())
+    }
+
+    fn set_ipv6_assign_prefix(&self, prefix: Option<cidr::Ipv6Cidr>) {
+        self.config.lock().unwrap().ipv6_assign_prefix = prefix.map(|p| p.to_string());
     }
 
     fn get_dhcp(&self) -> bool {

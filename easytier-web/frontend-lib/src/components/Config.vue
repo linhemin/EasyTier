@@ -298,6 +298,21 @@ const portForwardProtocolOptions = ref(["tcp","udp"]);
                 </div>
               </div>
 
+              <div class="flex flex-row gap-x-9 flex-wrap ">
+                <div class="flex flex-col gap-2 grow">
+                  <label>{{ t('enable_ipv6_distribute') }}</label>
+                  <ToggleButton v-model="curNetwork.enable_ipv6_distribute" on-icon="pi pi-check" off-icon="pi pi-times"
+                    :on-label="t('off_text')" :off-label="t('on_text')" class="w-48" />
+                  <div v-if="curNetwork.enable_ipv6_distribute" class="items-center flex flex-row gap-x-4">
+                    <div class="flex flex-row gap-x-9 flex-wrap w-full">
+                      <div class="flex flex-col gap-2 basis-8/12 grow">
+                        <InputText v-model="curNetwork.ipv6_distribute_prefix" :placeholder="t('ipv6_distribute_prefix')" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div class="flex flex-row gap-x-9 flex-wrap">
                 <div class="flex flex-col gap-2 grow p-fluid">
                   <label for="listener_urls">{{ t('listener_urls') }}</label>

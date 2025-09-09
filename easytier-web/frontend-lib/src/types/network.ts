@@ -28,6 +28,9 @@ export interface NetworkConfig {
   vpn_portal_client_network_addr: string
   vpn_portal_client_network_len: number
 
+  enable_ipv6_distribute: boolean
+  ipv6_distribute_prefix: string
+
   advanced_settings: boolean
 
   listener_urls: string[]
@@ -96,6 +99,9 @@ export function DEFAULT_NETWORK_CONFIG(): NetworkConfig {
     vpn_portal_listen_port: 22022,
     vpn_portal_client_network_addr: '',
     vpn_portal_client_network_len: 24,
+
+    enable_ipv6_distribute: false,
+    ipv6_distribute_prefix: '',
 
     advanced_settings: false,
 
