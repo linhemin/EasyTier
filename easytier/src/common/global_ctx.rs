@@ -452,9 +452,9 @@ impl GlobalCtx {
 
                     #[cfg(target_os = "windows")]
                     {
+                        use pnet::datalink::interfaces;
                         use std::process::Command;
-                        // Install a /128 route and publish it so the host advertises
-                        // reachability for the delegated address.
+                        // Add a /128 route for the delegated address.
                         let _ = Command::new("netsh")
                             .args([
                                 "interface",
@@ -463,21 +463,39 @@ impl GlobalCtx {
                                 "route",
                                 &format!("{}/128", addr_str),
                                 &dev,
-                                "publish=yes",
                             ])
                             .status();
-                        // Enable forwarding on the interface so Windows will answer
-                        // Neighbor Discovery requests for the published address.
-                        let _ = Command::new("netsh")
-                            .args([
-                                "interface",
-                                "ipv6",
-                                "set",
-                                "interface",
-                                &dev,
-                                "forwarding=enabled",
-                            ])
-                            .status();
+
+                        // Query the interface's MAC so we can proxy NDP for the
+                        // delegated address by installing a static neighbor entry.
+                        if let Some(mac) = interfaces()
+                            .into_iter()
+                            .find(|i| i.name == dev)
+                            .and_then(|i| i.mac)
+                        {
+                            let mac_str = mac.to_string().replace(':', "-");
+                            let _ = Command::new("netsh")
+                                .args([
+                                    "interface",
+                                    "ipv6",
+                                    "add",
+                                    "neighbor",
+                                    &dev,
+                                    &addr_str,
+                                    &mac_str,
+                                ])
+                                .status();
+                            let _ = Command::new("netsh")
+                                .args([
+                                    "interface",
+                                    "ipv6",
+                                    "set",
+                                    "interface",
+                                    &dev,
+                                    "forwarding=enabled",
+                                ])
+                                .status();
+                        }
                     }
 
                     #[cfg(target_os = "macos")]
