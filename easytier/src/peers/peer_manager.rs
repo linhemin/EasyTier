@@ -1096,6 +1096,7 @@ impl PeerManager {
             dst_peers.push(peer_id);
         } else if !ipv6_addr.is_unicast_link_local() {
             // NOTE: never route link local address to exit node.
+            // 1) prefer explicitly configured IPv6 exit nodes
             for exit_node in &self.exit_nodes {
                 let IpAddr::V6(exit_node) = exit_node else {
                     continue;
@@ -1104,6 +1105,16 @@ impl PeerManager {
                     dst_peers.push(peer_id);
                     is_exit_node = true;
                     break;
+                }
+            }
+
+            // 2) if none configured, try auto-select one connected peer deterministically (fallback)
+            if dst_peers.is_empty() && self.global_ctx.config.get_enable_ipv6_onlink_allocator() {
+                let mut peers = self.peers.list_peers_with_conn().await;
+                if !peers.is_empty() {
+                    peers.sort_unstable();
+                    dst_peers.push(peers[0]);
+                    is_exit_node = true;
                 }
             }
         }

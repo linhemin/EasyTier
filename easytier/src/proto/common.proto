@@ -191,6 +191,8 @@ message PeerFeatureFlag {
   bool avoid_relay_data = 2;
   bool kcp_input = 3;
   bool no_relay_kcp = 4;
+  // indicates this peer can act as IPv6 egress (gateway)
+  bool is_ipv6_gateway = 5;
 }
 
 enum SocketType {
