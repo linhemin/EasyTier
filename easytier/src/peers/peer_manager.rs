@@ -1108,13 +1108,33 @@ impl PeerManager {
                 }
             }
 
-            // 2) if none configured, try auto-select one connected peer deterministically (fallback)
+            // 2) Prefer a connected peer that advertises IPv6 gateway capability
             if dst_peers.is_empty() && self.global_ctx.config.get_enable_ipv6_onlink_allocator() {
-                let mut peers = self.peers.list_peers_with_conn().await;
-                if !peers.is_empty() {
-                    peers.sort_unstable();
-                    dst_peers.push(peers[0]);
-                    is_exit_node = true;
+                // Collect connected peers and try to find any with is_ipv6_gateway flag
+                let mut connected = self.peers.list_peers_with_conn().await;
+                if !connected.is_empty() {
+                    // stable order for determinism
+                    connected.sort_unstable();
+                    // Try to find a preferred IPv6 gateway
+                    for pid in &connected {
+                        if let Some(info) = self.get_route().get_peer_info(*pid).await {
+                            if info
+                                .feature_flag
+                                .as_ref()
+                                .map(|f| f.is_ipv6_gateway)
+                                .unwrap_or(false)
+                            {
+                                dst_peers.push(*pid);
+                                is_exit_node = true;
+                                break;
+                            }
+                        }
+                    }
+                    // Fallback to first connected peer if none explicitly opt-in as IPv6 gateway
+                    if dst_peers.is_empty() {
+                        dst_peers.push(connected[0]);
+                        is_exit_node = true;
+                    }
                 }
             }
         }

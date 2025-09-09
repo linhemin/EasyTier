@@ -93,11 +93,21 @@ impl IfConfiguerTrait for MacIfConfiger {
 
     async fn remove_ipv6(&self, name: &str, ip: Option<Ipv6Inet>) -> Result<(), Error> {
         if let Some(ip) = ip {
-            run_shell_cmd(format!("ifconfig {} inet6 {} delete", name, ip.address()).as_str()).await
-        } else {
-            // Remove all IPv6 addresses is more complex on macOS, just succeed
-            Ok(())
+            return run_shell_cmd(
+                format!("ifconfig {} inet6 {} delete", name, ip.address()).as_str(),
+            )
+            .await;
         }
+
+        // Remove all IPv6 addresses on this interface.
+        // Enumerate existing IPv6 addresses and delete them one by one.
+        // Note: link-local addresses usually have a scope id (e.g., %utun0), keep them intact.
+        let cmd = format!(
+            r#"addrs=$(ifconfig {} inet6 | awk '/inet6 / {{print $2}}' | grep -v '^fe80:');
+            for a in $addrs; do ifconfig {} inet6 $a delete || true; done"#,
+            name, name
+        );
+        run_shell_cmd(cmd.as_str()).await
     }
 
     async fn add_ipv6_route(
