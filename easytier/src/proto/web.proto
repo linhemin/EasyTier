@@ -111,6 +111,12 @@ message NetworkInstanceRunningInfo {
   bool running = 7;
   optional string error_msg = 8;
   peer_rpc.RouteForeignNetworkSummary foreign_network_summary = 9;
+  repeated PeerAssignedIpv6 peer_assigned_ipv6s = 10;
+}
+
+message PeerAssignedIpv6 {
+  string inst_id = 1;
+  repeated common.Ipv6Inet addrs = 2;
 }
 
 message NetworkInstanceRunningInfoMap {

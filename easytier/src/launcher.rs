@@ -220,11 +220,47 @@ impl EasyTierLauncher {
                         assigned_ipv6s,
                     };
                     *data_c.my_node_info.write().unwrap() = node_info.clone();
-                    *data_c.routes.write().unwrap() = peer_mgr_c.list_routes().await;
+                    let routes = peer_mgr_c.list_routes().await;
+                    *data_c.routes.write().unwrap() = routes.clone();
+                    // build peers' overlay ipv6s
+                    let mut peer_assigned = Vec::new();
+                    let prefixes = global_ctx_c.config.get_ipv6_prefixes();
+                    if !prefixes.is_empty() {
+                        for r in routes.iter() {
+                            if r.inst_id == global_ctx_c.get_id().to_string() { continue; }
+                            if let Ok(uuid) = uuid::Uuid::parse_str(&r.inst_id) {
+                                use std::hash::{Hash, Hasher};
+                                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                                uuid.as_u128().hash(&mut hasher);
+                                global_ctx_c.get_network_name().hash(&mut hasher);
+                                let h64 = hasher.finish();
+                                let mut addrs = Vec::new();
+                                for prefix in prefixes.iter() {
+                                    let pfx_len = prefix.network_length();
+                                    let host_bits = 128 - pfx_len as u32;
+                                    let base = prefix.first_address();
+                                    let mut addr_u128 = u128::from_be_bytes(base.octets());
+                                    let mask: u128 = if host_bits == 128 { 0 } else { (!0u128) >> pfx_len };
+                                    let host_part = if host_bits >= 64 {
+                                        (h64 as u128) & mask
+                                    } else if host_bits == 0 { 0 } else { ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask };
+                                    addr_u128 = (addr_u128 & (!mask)) | host_part;
+                                    let ipv6 = std::net::Ipv6Addr::from(addr_u128.to_be_bytes());
+                                    addrs.push(cidr::Ipv6Inet::new(ipv6, 128).unwrap().into());
+                                }
+                                peer_assigned.push(web::PeerAssignedIpv6{ inst_id: r.inst_id.clone(), addrs });
+                            }
+                        }
+                    }
                     *data_c.peers.write().unwrap() =
                         PeerManagerRpcService::list_peers(&peer_mgr_c).await;
                     *data_c.foreign_network_summary.write().unwrap() =
                         peer_mgr_c.get_foreign_network_summary().await;
+                    // attach to running info
+                    {
+                        let mut info = data_c.my_node_info.write().unwrap();
+                        info.assigned_ipv6s = info.assigned_ipv6s.clone();
+                    }
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
             });
@@ -422,6 +458,37 @@ impl NetworkInstance {
         let routes = launcher.get_routes();
         let peer_route_pairs = list_peer_route_pair(peers.clone(), routes.clone());
 
+        // Build peers' overlay IPv6s for display
+        let mut peer_assigned_list: Vec<web::PeerAssignedIpv6> = Vec::new();
+        let prefixes = self.config.get_ipv6_prefixes();
+        if !prefixes.is_empty() {
+            for r in routes.iter() {
+                if r.inst_id == self.get_id().to_string() { continue; }
+                if let Ok(uuid) = uuid::Uuid::parse_str(&r.inst_id) {
+                    use std::hash::{Hash, Hasher};
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    uuid.as_u128().hash(&mut hasher);
+                    self.config.get_network_identity().network_name.hash(&mut hasher);
+                    let h64 = hasher.finish();
+                    let mut addrs = Vec::new();
+                    for prefix in prefixes.iter() {
+                        let pfx_len = prefix.network_length();
+                        let host_bits = 128 - pfx_len as u32;
+                        let base = prefix.first_address();
+                        let mut addr_u128 = u128::from_be_bytes(base.octets());
+                        let mask: u128 = if host_bits == 128 { 0 } else { (!0u128) >> pfx_len };
+                        let host_part = if host_bits >= 64 {
+                            (h64 as u128) & mask
+                        } else if host_bits == 0 { 0 } else { ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask };
+                        addr_u128 = (addr_u128 & (!mask)) | host_part;
+                        let ipv6 = std::net::Ipv6Addr::from(addr_u128.to_be_bytes());
+                        addrs.push(cidr::Ipv6Inet::new(ipv6, 128).unwrap().into());
+                    }
+                    peer_assigned_list.push(web::PeerAssignedIpv6 { inst_id: r.inst_id.clone(), addrs });
+                }
+            }
+        }
+
         Some(NetworkInstanceRunningInfo {
             dev_name: launcher.get_dev_name(),
             my_node_info: Some(launcher.get_node_info()),
@@ -436,6 +503,7 @@ impl NetworkInstance {
             running: launcher.running(),
             error_msg: launcher.error_msg(),
             foreign_network_summary: Some(launcher.get_foreign_network_summary()),
+            peer_assigned_ipv6s: peer_assigned_list,
         })
     }
 

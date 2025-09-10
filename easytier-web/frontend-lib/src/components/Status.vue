@@ -173,6 +173,18 @@ const myNodeInfoChips = computed(() => {
     } as Chip)
   }
 
+  // peers overlay assigned ipv6s
+  const peerAssigned = props.curNetworkInst.detail?.peer_assigned_ipv6s || []
+  for (const p of peerAssigned) {
+    const list = (p.addrs || []).map(a => `${ipv6ToString(a.address)}/${a.network_length}`).join(', ')
+    if (list) {
+      chips.push({
+        label: `Peer ${p.inst_id.slice(0, 8)} IPv6: ${list}`,
+        icon: '',
+      } as Chip)
+    }
+  }
+
   // public ip
   const public_ip = my_node_info.ips?.public_ipv4
   if (public_ip) {

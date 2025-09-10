@@ -682,6 +682,23 @@ impl NicCtx {
         Ok(())
     }
 
+    pub async fn assign_ipv6_multi_to_tun_device(
+        &self,
+        ipv6_addrs: Vec<cidr::Ipv6Inet>,
+    ) -> Result<(), Error> {
+        let nic = self.nic.lock().await;
+        nic.link_up().await?;
+        nic.remove_ipv6(None).await?;
+        for inet in ipv6_addrs.iter() {
+            nic.add_ipv6(inet.address(), inet.network_length() as i32).await?;
+            #[cfg(any(target_os = "macos", target_os = "freebsd"))]
+            {
+                nic.add_ipv6_route(inet.first_address(), inet.network_length()).await?;
+            }
+        }
+        Ok(())
+    }
+
     async fn do_forward_nic_to_peers_ipv4(ret: ZCPacket, mgr: &PeerManager) {
         if let Some(ipv4) = Ipv4Packet::new(ret.payload()) {
             if ipv4.get_version() != 4 {
@@ -1100,8 +1117,31 @@ impl NicCtx {
             self.assign_ipv4_to_tun_device(ipv4_addr).await?;
         }
 
-        // Assign IPv6 address if provided
-        if let Some(ipv6_addr) = ipv6_addr {
+        // Assign IPv6 address(es)
+        let prefixes = self.global_ctx.config.get_ipv6_prefixes();
+        let allocator_enabled = self.global_ctx.config.get_enable_ipv6_onlink_allocator();
+        if allocator_enabled && !prefixes.is_empty() && !self.global_ctx.get_flags().no_tun {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            self.global_ctx.get_id().as_u128().hash(&mut hasher);
+            self.global_ctx.get_network_name().hash(&mut hasher);
+            let h64 = hasher.finish();
+            let mut addrs = Vec::new();
+            for prefix in prefixes.iter() {
+                let pfx_len = prefix.network_length();
+                let host_bits = 128 - pfx_len as u32;
+                let base = prefix.first_address();
+                let mut addr_u128 = u128::from_be_bytes(base.octets());
+                let mask: u128 = if host_bits == 128 { 0 } else { (!0u128) >> pfx_len };
+                let host_part = if host_bits >= 64 {
+                    (h64 as u128) & mask
+                } else if host_bits == 0 { 0 } else { ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask };
+                addr_u128 = (addr_u128 & (!mask)) | host_part;
+                let ipv6 = std::net::Ipv6Addr::from(addr_u128.to_be_bytes());
+                addrs.push(cidr::Ipv6Inet::new(ipv6, 128).unwrap());
+            }
+            self.assign_ipv6_multi_to_tun_device(addrs).await?;
+        } else if let Some(ipv6_addr) = ipv6_addr {
             self.assign_ipv6_to_tun_device(ipv6_addr).await?;
         }
 

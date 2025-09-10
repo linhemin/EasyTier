@@ -193,7 +193,7 @@ function searchIpv6PrefixSuggestions(event: { query: string }) {
     const parts = q.split('/')
     const addr = parts[0]
     const lenInput = parts[1] ? parseInt(parts[1]) : undefined
-    const lens = lenInput !== undefined && !Number.isNaN(lenInput) ? [lenInput] : [64, 56, 48]
+    const lens = lenInput !== undefined && !Number.isNaN(lenInput) ? [lenInput] : [56, 60, 64, 48, 52]
     for (const l of lens) {
       const c = canonicalizePrefix(addr, l)
       if (c) results.add(c)

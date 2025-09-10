@@ -165,6 +165,7 @@ export interface NetworkInstanceRunningInfo {
   peer_route_pairs: PeerRoutePair[]
   running: boolean
   error_msg?: string
+  peer_assigned_ipv6s?: { inst_id: string, addrs: Ipv6Inet[] }[]
 }
 
 export interface Ipv4Addr {
