@@ -292,7 +292,7 @@ function searchIpv6PrefixSuggestions(event: { query: string }) {
                   <label for="ipv6_prefix_toggle">{{ t('ipv6_prefix_allocator') }}</label>
                   <ToggleButton id="ipv6_prefix_toggle" v-model="curNetwork.enable_ipv6_prefix_allocator" on-icon="pi pi-check" off-icon="pi pi-times"
                     :on-label="t('off_text')" :off-label="t('on_text')" class="w-48"
-                    :disabled="curNetwork.no_tun" v-tooltip="curNetwork.no_tun ? 'Requires TUN interface' : ''" />
+                    :disabled="curNetwork.no_tun" v-tooltip="curNetwork.no_tun ? t('requires_tun') : ''" />
                   <small v-if="curNetwork.no_tun" class="text-surface-500">{{ t('requires_tun') }}</small>
                 </div>
               </div>

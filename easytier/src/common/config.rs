@@ -442,8 +442,28 @@ impl Default for TomlConfigLoader {
 
 impl TomlConfigLoader {
     pub fn new_from_str(config_str: &str) -> Result<Self, anyhow::Error> {
-        let mut config = toml::de::from_str::<Config>(config_str)
+        // First parse as TOML value to migrate legacy keys if present
+        let mut value: toml::Value = toml::de::from_str(config_str)
             .with_context(|| format!("failed to parse config file: {}", config_str))?;
+
+        if let Some(table) = value.as_table_mut() {
+            // Migrate legacy single prefix into new multi-prefixes
+            let has_new = table.contains_key("ipv6_prefixes");
+            let legacy_prefix = table.get("ipv6_onlink_prefix").and_then(|v| v.as_str()).map(|s| s.to_string());
+            if !has_new {
+                if let Some(pfx) = legacy_prefix {
+                    table.insert(
+                        "ipv6_prefixes".to_string(),
+                        toml::Value::Array(vec![toml::Value::String(pfx)]),
+                    );
+                }
+            }
+            // Drop legacy keys to avoid confusion
+            table.remove("ipv6_onlink_prefix");
+            table.remove("ipv6_onlink_iface");
+        }
+
+        let mut config = value.try_into::<Config>()?;
 
         config.flags_struct = Some(Self::gen_flags(config.flags.clone().unwrap_or_default()));
 

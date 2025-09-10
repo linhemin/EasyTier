@@ -183,6 +183,11 @@ export interface Ipv6Addr {
   part4: number
 }
 
+export interface Ipv6Inet {
+  address: Ipv6Addr
+  network_length: number
+}
+
 export interface Url {
   url: string
 }
