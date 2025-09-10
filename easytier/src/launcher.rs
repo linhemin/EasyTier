@@ -228,6 +228,13 @@ impl EasyTierLauncher {
                     if !prefixes.is_empty() {
                         for r in routes.iter() {
                             if r.inst_id == global_ctx_c.get_id().to_string() { continue; }
+                            // Require peer to advertise an IPv6 network before deriving any address
+                            let peer_inet = match &r.ipv6_addr {
+                                Some(v) => Some(cidr::Ipv6Inet::from(v.clone())),
+                                None => None,
+                            };
+                            if peer_inet.is_none() { continue; }
+                            let peer_inet = peer_inet.unwrap();
                             if let Ok(uuid) = uuid::Uuid::parse_str(&r.inst_id) {
                                 use std::hash::{Hash, Hasher};
                                 let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -236,6 +243,19 @@ impl EasyTierLauncher {
                                 let h64 = hasher.finish();
                                 let mut addrs = Vec::new();
                                 for prefix in prefixes.iter() {
+                                    // Only assign if local prefix and peer's IPv6 network are compatible (containment or equal)
+                                    let peer_cidr = cidr::Ipv6Cidr::new(
+                                        peer_inet.address(),
+                                        peer_inet.network_length() as u8,
+                                    )
+                                    .unwrap();
+                                    let compatible = if prefix.network_length() <= peer_inet.network_length() as u8 {
+                                        prefix.contains(&peer_inet.address())
+                                    } else {
+                                        peer_cidr.contains(&prefix.first_address())
+                                    };
+                                    if !compatible { continue; }
+
                                     let pfx_len = prefix.network_length();
                                     let host_bits = 128 - pfx_len as u32;
                                     let base = prefix.first_address();
@@ -248,7 +268,9 @@ impl EasyTierLauncher {
                                     let ipv6 = std::net::Ipv6Addr::from(addr_u128.to_be_bytes());
                                     addrs.push(cidr::Ipv6Inet::new(ipv6, 128).unwrap().into());
                                 }
-                                peer_assigned.push(web::PeerAssignedIpv6{ inst_id: r.inst_id.clone(), addrs });
+                                if !addrs.is_empty() {
+                                    peer_assigned.push(web::PeerAssignedIpv6{ inst_id: r.inst_id.clone(), addrs });
+                                }
                             }
                         }
                     }

@@ -4,7 +4,7 @@ import { IPv4 } from 'ip-num/IPNumber'
 import { NetworkInstance, type NodeInfo, type PeerRoutePair } from '../types/network'
 import { useI18n } from 'vue-i18n';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { ipv4InetToString, ipv4ToString, ipv6ToString, ipv6InetToCompressedString } from '../modules/utils';
+import { ipv4InetToString, ipv4ToString, ipv6ToString, ipv6InetToCompressedString, ipv6AddrToCompressedString } from '../modules/utils';
 import { DataTable, Column, Tag, Chip, Button, Dialog, ScrollPanel, Timeline, Divider, Card, } from 'primevue';
 
 const props = defineProps<{
@@ -151,8 +151,8 @@ function peerIpv6ListForRow(row: PeerRoutePair): string {
     : peerList
   // Fallback: if heuristic filter produced nothing, show all peer addresses
   const chosen = filtered.length > 0 ? filtered : peerList
-  const shown = chosen.map(ipv6InetToCompressedString)
-  return shown.join(', ')
+  const shown = chosen.map(inet => ipv6AddrToCompressedString(inet.address))
+  return shown.join('\n')
 }
 
 async function copyPeerIpv6(row: PeerRoutePair) {
@@ -455,7 +455,7 @@ function showEventLogs() {
                   <div>{{ ipFormat(slotProps.data) }}</div>
                   <div
                     v-if="peerIpv6ListForRow(slotProps.data)"
-                    class="text-xs overflow-hidden text-ellipsis whitespace-nowrap text-color-secondary cursor-pointer"
+                    class="text-xs overflow-hidden text-color-secondary cursor-pointer whitespace-pre-line"
                     v-tooltip="peerIpv6ListForRow(slotProps.data)"
                     @click="copyPeerIpv6(slotProps.data)"
                   >

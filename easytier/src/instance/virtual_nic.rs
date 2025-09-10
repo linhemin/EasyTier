@@ -930,7 +930,14 @@ impl NicCtx {
                 let routes = peer_mgr.list_routes().await;
                 for r in routes {
                     if r.inst_id == my_inst_id { continue; }
-                    // derive v6 from inst_id + prefix
+                    // Only derive if peer advertised an IPv6 prefix and it is compatible with our local prefix
+                    let peer_inet = match &r.ipv6_addr {
+                        Some(v) => Some(cidr::Ipv6Inet::from(v.clone())),
+                        None => None,
+                    };
+                    let Some(peer_inet) = peer_inet else { continue; };
+
+                    // derive v6 from inst_id + prefix when compatible
                     let Ok(uuid) = uuid::Uuid::parse_str(&r.inst_id) else { continue; };
                     use std::hash::{Hash, Hasher};
                     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -938,6 +945,14 @@ impl NicCtx {
                     global_ctx.get_network_name().hash(&mut hasher);
                     let h64 = hasher.finish();
                     for prefix in &prefixes {
+                        let peer_cidr = cidr::Ipv6Cidr::new(peer_inet.address(), peer_inet.network_length() as u8).unwrap();
+                        let compatible = if prefix.network_length() <= peer_inet.network_length() as u8 {
+                            prefix.contains(&peer_inet.address())
+                        } else {
+                            peer_cidr.contains(&prefix.first_address())
+                        };
+                        if !compatible { continue; }
+
                         let pfx_len = prefix.network_length();
                         let host_bits = 128 - pfx_len as u32;
                         let base = prefix.first_address();
