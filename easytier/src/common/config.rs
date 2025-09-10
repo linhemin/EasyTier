@@ -149,8 +149,8 @@ pub trait ConfigLoader: Send + Sync {
     // IPv6 on-link allocator configs
     fn get_ipv6_prefixes(&self) -> Vec<cidr::Ipv6Cidr>;
     fn set_ipv6_prefixes(&self, prefixes: Vec<cidr::Ipv6Cidr>);
-    fn get_enable_ipv6_onlink_allocator(&self) -> bool;
-    fn set_enable_ipv6_onlink_allocator(&self, enable: bool);
+    fn get_enable_ipv6_prefix_allocator(&self) -> bool;
+    fn set_enable_ipv6_prefix_allocator(&self, enable: bool);
 
     fn add_proxy_cidr(
         &self,
@@ -426,7 +426,8 @@ struct Config {
 
     // IPv6 prefix assignment
     ipv6_prefixes: Option<Vec<String>>,
-    enable_ipv6_onlink_allocator: Option<bool>,
+    #[serde(alias = "enable_ipv6_onlink_allocator")]
+    enable_ipv6_prefix_allocator: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -606,16 +607,16 @@ impl ConfigLoader for TomlConfigLoader {
         self.config.lock().unwrap().ipv6_prefixes = Some(prefixes.into_iter().map(|p| p.to_string()).collect());
     }
 
-    fn get_enable_ipv6_onlink_allocator(&self) -> bool {
+    fn get_enable_ipv6_prefix_allocator(&self) -> bool {
         self.config
             .lock()
             .unwrap()
-            .enable_ipv6_onlink_allocator
+            .enable_ipv6_prefix_allocator
             .unwrap_or(false)
     }
 
-    fn set_enable_ipv6_onlink_allocator(&self, enable: bool) {
-        self.config.lock().unwrap().enable_ipv6_onlink_allocator = Some(enable);
+    fn set_enable_ipv6_prefix_allocator(&self, enable: bool) {
+        self.config.lock().unwrap().enable_ipv6_prefix_allocator = Some(enable);
     }
 
     fn add_proxy_cidr(

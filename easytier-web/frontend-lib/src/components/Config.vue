@@ -3,6 +3,7 @@ import InputGroup from 'primevue/inputgroup'
 import InputGroupAddon from 'primevue/inputgroupaddon'
 import { SelectButton, Checkbox, InputText, InputNumber, AutoComplete, Panel, Divider, ToggleButton, Button, Password } from 'primevue'
 import { IPv6 } from 'ip-num/IPNumber'
+import { compressIpv6String } from '../modules/utils'
 import {
   addRow,
   DEFAULT_NETWORK_CONFIG,
@@ -178,7 +179,9 @@ const ipv6PrefixSuggestions = ref<string[]>([])
 function canonicalizePrefix(addr: string, len: number): string | null {
   try {
     const ipv6 = IPv6.fromString(addr)
-    return `${ipv6.toString()}/${len}`
+    const expanded = ipv6.toString()
+    const short = compressIpv6String(expanded)
+    return `${short}/${len}`
   } catch {
     return null
   }

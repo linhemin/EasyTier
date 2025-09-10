@@ -4,7 +4,7 @@ import { IPv4 } from 'ip-num/IPNumber'
 import { NetworkInstance, type NodeInfo, type PeerRoutePair } from '../types/network'
 import { useI18n } from 'vue-i18n';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { ipv4InetToString, ipv4ToString, ipv6ToString } from '../modules/utils';
+import { ipv4InetToString, ipv4ToString, ipv6ToString, ipv6InetToCompressedString } from '../modules/utils';
 import { DataTable, Column, Tag, Chip, Button, Dialog, ScrollPanel, Timeline, Divider, Card, } from 'primevue';
 
 const props = defineProps<{
@@ -117,6 +117,44 @@ const myNodeInfo = computed(() => {
   return props.curNetworkInst.detail?.my_node_info
 })
 
+// Helpers for matching peer IPv6 prefixes with local prefixes
+function ipv6AddrToBigInt(ip: { part1: number, part2: number, part3: number, part4: number }): bigint {
+  return (BigInt(ip.part1) << BigInt(96))
+    + (BigInt(ip.part2) << BigInt(64))
+    + (BigInt(ip.part3) << BigInt(32))
+    + BigInt(ip.part4)
+}
+
+function samePrefix(a: { address: any, network_length: number }, b: { address: any, network_length: number }): boolean {
+  if (a.network_length !== b.network_length) return false
+  const len = a.network_length
+  if (len <= 0) return true
+  const mask = len === 128 ? (BigInt(-1)) : (~((BigInt(1) << BigInt(128 - len)) - BigInt(1)))
+  const av = ipv6AddrToBigInt(a.address)
+  const bv = ipv6AddrToBigInt(b.address)
+  return (av & mask) === (bv & mask)
+}
+
+function peerIpv6ListForRow(row: PeerRoutePair): string {
+  const detail = props.curNetworkInst?.detail
+  if (!detail) return ''
+  const my = detail.my_node_info
+  const mine = my.assigned_ipv6s || []
+  const peerList = (detail.peer_assigned_ipv6s || []).find(p => p.inst_id === row.route.inst_id)?.addrs || []
+  const filtered = mine.length > 0
+    ? peerList.filter(p => mine.some(m => samePrefix(p, m)))
+    : peerList
+  const shown = filtered.map(ipv6InetToCompressedString)
+  return shown.join(', ')
+}
+
+async function copyPeerIpv6(row: PeerRoutePair) {
+  const text = peerIpv6ListForRow(row)
+  try {
+    if (navigator && navigator.clipboard) await navigator.clipboard.writeText(text)
+  } catch { /* ignore */ }
+}
+
 interface Chip {
   label: string
   icon: string
@@ -173,17 +211,7 @@ const myNodeInfoChips = computed(() => {
     } as Chip)
   }
 
-  // peers overlay assigned ipv6s
-  const peerAssigned = props.curNetworkInst.detail?.peer_assigned_ipv6s || []
-  for (const p of peerAssigned) {
-    const list = (p.addrs || []).map(a => `${ipv6ToString(a.address)}/${a.network_length}`).join(', ')
-    if (list) {
-      chips.push({
-        label: `Peer ${p.inst_id.slice(0, 8)} IPv6: ${list}`,
-        icon: '',
-      } as Chip)
-    }
-  }
+  // peers overlay assigned ipv6s moved to table near Virtual IPv4
 
   // public ip
   const public_ip = my_node_info.ips?.public_ipv4
@@ -414,7 +442,21 @@ function showEventLogs() {
         </template>
         <template #content>
           <DataTable :value="peerRouteInfos" column-resize-mode="fit" table-class="w-full">
-            <Column :field="ipFormat" :header="t('virtual_ipv4')" />
+            <Column :header="t('virtual_ipv4')">
+              <template #body="slotProps">
+                <div class="flex flex-col">
+                  <div>{{ ipFormat(slotProps.data) }}</div>
+                  <div
+                    v-if="peerIpv6ListForRow(slotProps.data)"
+                    class="text-xs overflow-hidden text-ellipsis whitespace-nowrap text-color-secondary cursor-pointer"
+                    v-tooltip="peerIpv6ListForRow(slotProps.data)"
+                    @click="copyPeerIpv6(slotProps.data)"
+                  >
+                    {{ peerIpv6ListForRow(slotProps.data) }}
+                  </div>
+                </div>
+              </template>
+            </Column>
             <Column :header="t('hostname')">
               <template #body="slotProps">
                 <div v-if="!slotProps.data.route.cost || !slotProps.data.route.feature_flag.is_public_server"

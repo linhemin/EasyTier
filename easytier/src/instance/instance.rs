@@ -317,7 +317,7 @@ impl Instance {
         {
             let cfg = &global_ctx.config;
             if global_ctx.get_ipv6().is_none()
-                && cfg.get_enable_ipv6_onlink_allocator()
+                && cfg.get_enable_ipv6_prefix_allocator()
             {
                 let prefixes = cfg.get_ipv6_prefixes();
                 if prefixes.is_empty() { } else {

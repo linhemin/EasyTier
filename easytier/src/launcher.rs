@@ -789,7 +789,7 @@ impl NetworkConfig {
 
         // IPv6 prefix assignment settings
         if let Some(enable) = self.enable_ipv6_prefix_allocator {
-            cfg.set_enable_ipv6_onlink_allocator(enable);
+            cfg.set_enable_ipv6_prefix_allocator(enable);
         }
         if !self.ipv6_prefixes.is_empty() {
             let mut parsed: Vec<cidr::Ipv6Cidr> = Vec::new();
@@ -989,7 +989,7 @@ impl NetworkConfig {
         }
 
         // IPv6 prefix assignment reflect to web config
-        if config.get_enable_ipv6_onlink_allocator() {
+        if config.get_enable_ipv6_prefix_allocator() {
             result.enable_ipv6_prefix_allocator = Some(true);
         }
         let pfxs = config.get_ipv6_prefixes();

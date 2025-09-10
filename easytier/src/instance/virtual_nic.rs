@@ -899,7 +899,7 @@ impl NicCtx {
         Ok(())
     }
 
-    async fn run_ipv6_onlink_allocator(&mut self) -> Result<(), Error> {
+    async fn run_ipv6_prefix_allocator(&mut self) -> Result<(), Error> {
         let Some(peer_mgr) = self.peer_mgr.upgrade() else {
             return Err(anyhow::anyhow!("peer manager not available").into());
         };
@@ -912,7 +912,7 @@ impl NicCtx {
 
         // Only run if allocator is enabled, TUN is used, and at least one prefix provided.
         if global_ctx.get_flags().no_tun { return Ok(()); }
-        if !global_ctx.config.get_enable_ipv6_onlink_allocator() {
+        if !global_ctx.config.get_enable_ipv6_prefix_allocator() {
             return Ok(());
         }
         let prefixes = global_ctx.config.get_ipv6_prefixes();
@@ -1004,7 +1004,7 @@ impl NicCtx {
         // - IPv6 on-link allocator is enabled (mesh-managed IPv6), or
         // - Exit nodes are configured (use peers as IPv6 egress).
         let global_ctx = self.global_ctx.clone();
-        let allocator_enabled = global_ctx.config.get_enable_ipv6_onlink_allocator();
+        let allocator_enabled = global_ctx.config.get_enable_ipv6_prefix_allocator();
         let has_exit_nodes = !global_ctx.config.get_exit_nodes().is_empty();
         if !allocator_enabled && !has_exit_nodes {
             return Ok(());
@@ -1119,7 +1119,7 @@ impl NicCtx {
 
         // Assign IPv6 address(es)
         let prefixes = self.global_ctx.config.get_ipv6_prefixes();
-        let allocator_enabled = self.global_ctx.config.get_enable_ipv6_onlink_allocator();
+        let allocator_enabled = self.global_ctx.config.get_enable_ipv6_prefix_allocator();
         if allocator_enabled && !prefixes.is_empty() && !self.global_ctx.get_flags().no_tun {
             use std::hash::{Hash, Hasher};
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -1147,8 +1147,8 @@ impl NicCtx {
 
         self.run_proxy_cidrs_route_updater().await?;
 
-        // On-link IPv6 allocation and NDP proxy routing (if enabled)
-        self.run_ipv6_onlink_allocator().await?;
+        // IPv6 prefix allocation and NDP proxy routing (if enabled)
+        self.run_ipv6_prefix_allocator().await?;
 
         // Default IPv6 route on non-gateway nodes
         self.run_ipv6_default_route_updater().await?;
