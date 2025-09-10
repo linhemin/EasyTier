@@ -117,28 +117,7 @@ const myNodeInfo = computed(() => {
   return props.curNetworkInst.detail?.my_node_info
 })
 
-// Helpers for matching peer IPv6 prefixes with local prefixes
-function ipv6AddrToBigInt(ip: { part1: number, part2: number, part3: number, part4: number }): bigint {
-  return (BigInt(ip.part1) << BigInt(96))
-    + (BigInt(ip.part2) << BigInt(64))
-    + (BigInt(ip.part3) << BigInt(32))
-    + BigInt(ip.part4)
-}
-
-// In backend, assigned IPv6s are /128 derived from configured prefixes.
-// We don't have the original prefix length here, so we use a heuristic set
-// of common IPv6 prefix lengths (64, 56, 48) to decide whether two /128
-// addresses belong to the same configured prefix.
-function samePrefix(a: { address: any, network_length: number }, b: { address: any, network_length: number }): boolean {
-  const av = ipv6AddrToBigInt(a.address)
-  const bv = ipv6AddrToBigInt(b.address)
-  const lens = [64, 56, 48]
-  for (const len of lens) {
-    const mask = len === 0 ? BigInt(0) : (~((BigInt(1) << BigInt(128 - len)) - BigInt(1)))
-    if ((av & mask) === (bv & mask)) return true
-  }
-  return false
-}
+// Backend now filters IPv6s by prefix intersection; no heuristic needed here.
 
 function peerIpv6ArrayForRow(row: PeerRoutePair): string[] {
   const detail = props.curNetworkInst?.detail
