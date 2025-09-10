@@ -147,10 +147,8 @@ pub trait ConfigLoader: Send + Sync {
     fn set_dhcp(&self, dhcp: bool);
 
     // IPv6 on-link allocator configs
-    fn get_ipv6_onlink_prefix(&self) -> Option<cidr::Ipv6Cidr>;
-    fn set_ipv6_onlink_prefix(&self, prefix: Option<cidr::Ipv6Cidr>);
-    fn get_ipv6_onlink_iface(&self) -> Option<String>;
-    fn set_ipv6_onlink_iface(&self, iface: Option<String>);
+    fn get_ipv6_prefixes(&self) -> Vec<cidr::Ipv6Cidr>;
+    fn set_ipv6_prefixes(&self, prefixes: Vec<cidr::Ipv6Cidr>);
     fn get_enable_ipv6_onlink_allocator(&self) -> bool;
     fn set_enable_ipv6_onlink_allocator(&self, enable: bool);
 
@@ -426,9 +424,8 @@ struct Config {
     stun_servers: Option<Vec<String>>,
     stun_servers_v6: Option<Vec<String>>,
 
-    // IPv6 on-link allocator
-    ipv6_onlink_prefix: Option<String>,
-    ipv6_onlink_iface: Option<String>,
+    // IPv6 prefix assignment
+    ipv6_prefixes: Option<Vec<String>>,
     enable_ipv6_onlink_allocator: Option<bool>,
 }
 
@@ -575,25 +572,18 @@ impl ConfigLoader for TomlConfigLoader {
         self.config.lock().unwrap().dhcp = Some(dhcp);
     }
 
-    fn get_ipv6_onlink_prefix(&self) -> Option<cidr::Ipv6Cidr> {
+    fn get_ipv6_prefixes(&self) -> Vec<cidr::Ipv6Cidr> {
         self.config
             .lock()
             .unwrap()
-            .ipv6_onlink_prefix
+            .ipv6_prefixes
             .as_ref()
-            .and_then(|s| s.parse().ok())
+            .map(|v| v.iter().filter_map(|s| s.parse().ok()).collect())
+            .unwrap_or_default()
     }
 
-    fn set_ipv6_onlink_prefix(&self, prefix: Option<cidr::Ipv6Cidr>) {
-        self.config.lock().unwrap().ipv6_onlink_prefix = prefix.map(|p| p.to_string());
-    }
-
-    fn get_ipv6_onlink_iface(&self) -> Option<String> {
-        self.config.lock().unwrap().ipv6_onlink_iface.clone()
-    }
-
-    fn set_ipv6_onlink_iface(&self, iface: Option<String>) {
-        self.config.lock().unwrap().ipv6_onlink_iface = iface;
+    fn set_ipv6_prefixes(&self, prefixes: Vec<cidr::Ipv6Cidr>) {
+        self.config.lock().unwrap().ipv6_prefixes = Some(prefixes.into_iter().map(|p| p.to_string()).collect());
     }
 
     fn get_enable_ipv6_onlink_allocator(&self) -> bool {

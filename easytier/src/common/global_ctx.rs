@@ -140,14 +140,7 @@ impl GlobalCtx {
             no_relay_kcp: config_fs.get_flags().disable_relay_kcp,
             ..Default::default()
         };
-        // Mark this node as an IPv6 gateway if on-link allocator is enabled with an upstream iface.
-        // This allows peers to prefer this node for IPv6 egress and on-link reachability.
-        if config_fs.get_enable_ipv6_onlink_allocator()
-            && config_fs.get_ipv6_onlink_prefix().is_some()
-            && config_fs.get_ipv6_onlink_iface().is_some()
-        {
-            feature_flags.is_ipv6_gateway = true;
-        }
+        // Remove IPv6 gateway concept: only prefix assignment remains; no special gateway flag.
 
         GlobalCtx {
             inst_name: config_fs.get_inst_name(),

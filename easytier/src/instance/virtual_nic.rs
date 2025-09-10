@@ -893,23 +893,19 @@ impl NicCtx {
         let tun_ifname = nic.ifname().to_owned();
         drop(nic);
 
-        // Only run if allocator is enabled and prefix provided.
+        // Only run if allocator is enabled and at least one prefix provided.
         if !global_ctx.config.get_enable_ipv6_onlink_allocator() {
             return Ok(());
         }
-        let Some(prefix) = global_ctx.config.get_ipv6_onlink_prefix() else {
-            return Ok(());
-        };
+        let prefixes = global_ctx.config.get_ipv6_prefixes();
+        if prefixes.is_empty() { return Ok(()); }
 
         let my_inst_id = global_ctx.get_id().to_string();
-        let wan_iface = global_ctx.config.get_ipv6_onlink_iface();
         // track current applied set to add/remove
         let applied = std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::BTreeSet::<std::net::Ipv6Addr>::new()));
         let applied_clone = applied.clone();
 
         self.tasks.spawn(async move {
-            let mut ndp_prepared = false;
-            let mut fw_prepared = false;
             loop {
                 let mut new_set = std::collections::BTreeSet::<std::net::Ipv6Addr>::new();
                 let routes = peer_mgr.list_routes().await;
@@ -922,25 +918,28 @@ impl NicCtx {
                     uuid.as_u128().hash(&mut hasher);
                     global_ctx.get_network_name().hash(&mut hasher);
                     let h64 = hasher.finish();
-                    let pfx_len = prefix.network_length();
-                    let host_bits = 128 - pfx_len as u32;
-                    let base = prefix.first_address();
-                    let mut oct = base.octets();
-                    let mut addr_u128 = u128::from_be_bytes(oct);
-                    let mask: u128 = if host_bits == 128 { 0 } else { (!0u128) >> pfx_len };
-                    let host_part = if host_bits >= 64 {
-                        (h64 as u128) & mask
-                    } else if host_bits == 0 { 0 } else { ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask };
-                    addr_u128 = (addr_u128 & (!mask)) | host_part;
-                    let ipv6 = std::net::Ipv6Addr::from(addr_u128.to_be_bytes());
-                    new_set.insert(ipv6);
+                    for prefix in &prefixes {
+                        let pfx_len = prefix.network_length();
+                        let host_bits = 128 - pfx_len as u32;
+                        let base = prefix.first_address();
+                        let mut oct = base.octets();
+                        let mut addr_u128 = u128::from_be_bytes(oct);
+                        let mask: u128 = if host_bits == 128 { 0 } else { (!0u128) >> pfx_len };
+                        let host_part = if host_bits >= 64 {
+                            (h64 as u128) & mask
+                        } else if host_bits == 0 { 0 } else { ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask };
+                        addr_u128 = (addr_u128 & (!mask)) | host_part;
+                        let ipv6 = std::net::Ipv6Addr::from(addr_u128.to_be_bytes());
+                        new_set.insert(ipv6);
+                    }
                 }
 
-                // Also make the gateway's own TUN IPv6 reachable on-link via NDP proxy
+                // Also include the gateway's own TUN IPv6 if it falls into any configured prefix
                 if let Some(my_v6) = global_ctx.get_ipv6() {
-                    // Only include if inside the on-link prefix, to avoid proxying unrelated addresses
-                    if prefix.contains(&my_v6.address()) {
-                        new_set.insert(my_v6.address());
+                    for prefix in &prefixes {
+                        if prefix.contains(&my_v6.address()) {
+                            new_set.insert(my_v6.address());
+                        }
                     }
                 }
 
@@ -952,67 +951,12 @@ impl NicCtx {
                     let _g = net_ns.guard();
                     // remove route on tun
                     let _ = ifcfg.remove_ipv6_route(&tun_ifname, *ip, 128).await;
-                    if let Some(ref wan) = wan_iface {
-                        #[cfg(target_os = "linux")]
-                        {
-                            let _ = ifcfg::run_shell_cmd(&format!("ip -6 neigh del proxy {} dev {}", ip, wan)).await;
-                        }
-                        #[cfg(target_os = "macos")]
-                        {
-                            let _ = ifcfg::run_shell_cmd(&format!("ndp -d {}", ip)).await;
-                        }
-                        #[cfg(target_os = "windows")]
-                        {
-                            let _ = ifcfg::run_shell_cmd(&format!("netsh interface ipv6 delete route {} {}", ip, wan)).await;
-                        }
-                    }
                 }
                 // additions
                 for ip in new_set.iter() {
                     if applied_guard.contains(ip) { continue; }
                     let _g = net_ns.guard();
                     let _ = ifcfg.add_ipv6_route(&tun_ifname, *ip, 128, None).await;
-                    if let Some(ref wan) = wan_iface {
-                        // one-time kernel toggles per loop
-                        if !ndp_prepared {
-                            #[cfg(target_os = "linux")]
-                            {
-                                let _ = ifcfg::run_shell_cmd(&format!("sysctl -w net.ipv6.conf.all.forwarding=1; sysctl -w net.ipv6.conf.{}.proxy_ndp=1", wan)).await;
-                                // best-effort open forwarding and NAT66 in firewall (iptables-nft). Ignore errors.
-                                if !fw_prepared {
-                                    // Allow forwarding between TUN and upstream iface
-                                    let _ = ifcfg::run_shell_cmd(&format!("ip6tables -I FORWARD -i {} -o {} -j ACCEPT", tun_ifname, wan)).await;
-                                    let _ = ifcfg::run_shell_cmd(&format!("ip6tables -I FORWARD -i {} -o {} -m state --state RELATED,ESTABLISHED -j ACCEPT", wan, tun_ifname)).await;
-
-                                    // Enable NAT66 so peers with non-GUA overlay IPv6 can reach Internet and upstream LAN
-                                    // This requires the nat table to be available (nft backends usually provide it)
-                                    let _ = ifcfg::run_shell_cmd(&format!("ip6tables -t nat -C POSTROUTING -o {} -j MASQUERADE || ip6tables -t nat -A POSTROUTING -o {} -j MASQUERADE", wan, wan)).await;
-
-                                    fw_prepared = true;
-                                }
-                            }
-                            #[cfg(target_os = "macos")]
-                            {
-                                let _ = ifcfg::run_shell_cmd("sysctl -w net.inet6.ip6.forwarding=1").await;
-                            }
-                            ndp_prepared = true;
-                        }
-                        #[cfg(target_os = "linux")]
-                        {
-                            let _ = ifcfg::run_shell_cmd(&format!("ip -6 neigh replace proxy {} dev {}", ip, wan)).await;
-                        }
-                        #[cfg(target_os = "macos")]
-                        {
-                            // add proxy neighbor using interface mac
-                            let cmd = format!("ndp -s {} $(ifconfig {} | grep -m1 ether | sed -E 's/.*ether ([0-9a-f:]+).*/\\1/') proxy", ip, wan);
-                            let _ = ifcfg::run_shell_cmd(&cmd).await;
-                        }
-                        #[cfg(target_os = "windows")]
-                        {
-                            // publish a host route; on recent Windows this will announce ND for the address
-                            let _ = ifcfg::run_shell_cmd(&format!("netsh interface ipv6 add route {}/128 {} publish=yes", ip, wan)).await;
-                        }
-                    }
                 }
                 *applied_guard = new_set;
                 drop(applied_guard);
@@ -1034,12 +978,7 @@ impl NicCtx {
         if !allocator_enabled && !has_exit_nodes {
             return Ok(());
         }
-        // gateway node: only skip when allocator is driving the gateway; for exit-node
-        // case this function still only runs on non-gateway nodes (since they won't
-        // have ipv6_onlink_iface set).
-        if allocator_enabled && global_ctx.config.get_ipv6_onlink_iface().is_some() {
-            return Ok(());
-        }
+        // No dedicated gateway concept; keep default route updater when enabled.
 
         let nic = self.nic.lock().await;
         let ifname = nic.ifname().to_owned();

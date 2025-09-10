@@ -318,9 +318,10 @@ impl Instance {
             let cfg = &global_ctx.config;
             if global_ctx.get_ipv6().is_none()
                 && cfg.get_enable_ipv6_onlink_allocator()
-                && cfg.get_ipv6_onlink_prefix().is_some()
             {
-                let prefix = cfg.get_ipv6_onlink_prefix().unwrap();
+                let prefixes = cfg.get_ipv6_prefixes();
+                if prefixes.is_empty() { } else {
+                let prefix = prefixes[0];
                 let inst_id = global_ctx.get_id();
                 // derive host bits from instance UUID deterministically
                 use std::hash::{Hash, Hasher};
@@ -355,6 +356,7 @@ impl Instance {
                 let ipv6 = std::net::Ipv6Addr::from(addr_u128.to_be_bytes());
                 let inet = cidr::Ipv6Inet::new(ipv6, 128).unwrap();
                 global_ctx.set_ipv6(Some(inet));
+                }
             }
         }
 

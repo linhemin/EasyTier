@@ -76,10 +76,9 @@ message NetworkConfig {
 
     optional bool disable_sym_hole_punching = 49;
 
-    // IPv6 on-link global addressing
-    optional bool enable_ipv6_onlink_allocator = 50;
-    optional string ipv6_onlink_prefix = 51; // e.g. 2001:db8:1:2::/64
-    optional string ipv6_onlink_iface = 52;   // upstream interface for NDP proxy (gateway only)
+    // IPv6 prefix assignment (custom IPv6 prefixes)
+    optional bool enable_ipv6_prefix_allocator = 50;
+    repeated string ipv6_prefixes = 51; // e.g. 2001:db8:1:2::/64
 }
 
 message PortForwardConfig {

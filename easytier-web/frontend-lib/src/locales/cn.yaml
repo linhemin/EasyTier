@@ -330,3 +330,5 @@ web:
     language: 语言
     theme: 主题
     logout: 退出登录
+ipv6_prefix_allocator: IPv6 前缀分配
+ipv6_prefixes: IPv6 前缀列表

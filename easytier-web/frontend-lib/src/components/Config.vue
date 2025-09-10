@@ -172,6 +172,22 @@ const bool_flags: BoolFlag[] = [
 
 const portForwardProtocolOptions = ref(["tcp","udp"]);
 
+// IPv6 prefix suggestions for autocomplete
+const ipv6PrefixSuggestions = ref<string[]>([])
+function searchIpv6PrefixSuggestions(event: { query: string }) {
+  const q = (event.query || '').trim()
+  const results: string[] = []
+  if (q) {
+    if (q.includes(':')) {
+      const base = q.replace(/\s/g, '')
+      for (const len of [64, 56, 48]) results.push(`${base}/${len}`)
+    } else {
+      results.push('2001:db8::/64')
+    }
+  }
+  ipv6PrefixSuggestions.value = results
+}
+
 </script>
 
 <template>
@@ -258,20 +274,18 @@ const portForwardProtocolOptions = ref(["tcp","udp"]);
 
               <div class="flex flex-row gap-x-9 flex-wrap">
                 <div class="flex flex-col gap-2 basis-5/12 grow">
-                  <label for="onlink_toggle">IPv6 On-link Global Addressing</label>
-                  <ToggleButton id="onlink_toggle" v-model="curNetwork.enable_ipv6_onlink_allocator" on-icon="pi pi-check" off-icon="pi pi-times"
+                  <label for="ipv6_prefix_toggle">{{ t('ipv6_prefix_allocator') }}</label>
+                  <ToggleButton id="ipv6_prefix_toggle" v-model="curNetwork.enable_ipv6_prefix_allocator" on-icon="pi pi-check" off-icon="pi pi-times"
                     :on-label="t('off_text')" :off-label="t('on_text')" class="w-48" />
                 </div>
               </div>
 
-              <div v-if="curNetwork.enable_ipv6_onlink_allocator" class="flex flex-row gap-x-9 flex-wrap">
+              <div v-if="curNetwork.enable_ipv6_prefix_allocator" class="flex flex-row gap-x-9 flex-wrap">
                 <div class="flex flex-col gap-2 basis-5/12 grow">
-                  <label for="onlink_prefix">IPv6 On-link Prefix</label>
-                  <InputText id="onlink_prefix" v-model="curNetwork.ipv6_onlink_prefix" placeholder="2001:db8:1:2::/64" />
-                </div>
-                <div class="flex flex-col gap-2 basis-5/12 grow">
-                  <label for="onlink_iface">Upstream Interface (gateway)</label>
-                  <InputText id="onlink_iface" v-model="curNetwork.ipv6_onlink_iface" placeholder="e.g., eth0 / en0 / Ethernet" />
+                  <label for="ipv6_prefixes">{{ t('ipv6_prefixes') }}</label>
+                  <AutoComplete id="ipv6_prefixes" v-model="curNetwork.ipv6_prefixes"
+                    :placeholder="t('chips_placeholder', ['2001:db8:1:2::/64'])" class="w-full" multiple fluid
+                    :suggestions="ipv6PrefixSuggestions" @complete="searchIpv6PrefixSuggestions" />
                 </div>
               </div>
 

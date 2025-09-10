@@ -694,22 +694,19 @@ impl NetworkConfig {
             ));
         }
 
-        // IPv6 on-link allocator settings
-        if let Some(enable) = self.enable_ipv6_onlink_allocator {
+        // IPv6 prefix assignment settings
+        if let Some(enable) = self.enable_ipv6_prefix_allocator {
             cfg.set_enable_ipv6_onlink_allocator(enable);
         }
-        if let Some(prefix) = self.ipv6_onlink_prefix.as_ref() {
-            if !prefix.is_empty() {
-                let ipv6_prefix = prefix
+        if !self.ipv6_prefixes.is_empty() {
+            let mut parsed: Vec<cidr::Ipv6Cidr> = Vec::new();
+            for p in &self.ipv6_prefixes {
+                let ipv6_prefix = p
                     .parse::<cidr::Ipv6Cidr>()
-                    .with_context(|| format!("failed to parse ipv6 on-link prefix: {}", prefix))?;
-                cfg.set_ipv6_onlink_prefix(Some(ipv6_prefix));
+                    .with_context(|| format!("failed to parse ipv6 prefix: {}", p))?;
+                parsed.push(ipv6_prefix);
             }
-        }
-        if let Some(iface) = self.ipv6_onlink_iface.as_ref() {
-            if !iface.is_empty() {
-                cfg.set_ipv6_onlink_iface(Some(iface.clone()));
-            }
+            cfg.set_ipv6_prefixes(parsed);
         }
 
         let mut flags = gen_default_flags();
@@ -898,15 +895,13 @@ impl NetworkConfig {
             result.vpn_portal_listen_port = Some(vpn_config.wireguard_listen.port() as i32);
         }
 
-        // IPv6 on-link allocator reflect to web config
+        // IPv6 prefix assignment reflect to web config
         if config.get_enable_ipv6_onlink_allocator() {
-            result.enable_ipv6_onlink_allocator = Some(true);
+            result.enable_ipv6_prefix_allocator = Some(true);
         }
-        if let Some(pfx) = config.get_ipv6_onlink_prefix() {
-            result.ipv6_onlink_prefix = Some(pfx.to_string());
-        }
-        if let Some(iface) = config.get_ipv6_onlink_iface() {
-            result.ipv6_onlink_iface = Some(iface);
+        let pfxs = config.get_ipv6_prefixes();
+        if !pfxs.is_empty() {
+            result.ipv6_prefixes = pfxs.iter().map(|p| p.to_string()).collect();
         }
 
         if let Some(routes) = config.get_routes() {
