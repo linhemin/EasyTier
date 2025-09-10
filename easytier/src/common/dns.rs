@@ -142,7 +142,7 @@ mod tests {
     async fn test_socket_addrs() {
         let url = url::Url::parse("tcp://github-ci-test.easytier.cn:80").unwrap();
         let addrs = socket_addrs(&url, || Some(80)).await.unwrap();
-        assert!(addrs.len() >= 1, "addrs: {:?}", addrs);
+        assert!(!addrs.is_empty(), "addrs: {:?}", addrs);
         println!("addrs: {:?}", addrs);
 
         ALLOW_USE_SYSTEM_DNS_RESOLVER.store(false, std::sync::atomic::Ordering::Relaxed);
@@ -150,7 +150,7 @@ mod tests {
             ALLOW_USE_SYSTEM_DNS_RESOLVER.store(true, std::sync::atomic::Ordering::Relaxed);
         );
         let addrs = socket_addrs(&url, || Some(80)).await.unwrap();
-        assert!(addrs.len() >= 1, "addrs: {:?}", addrs);
+        assert!(!addrs.is_empty(), "addrs: {:?}", addrs);
         println!("addrs2: {:?}", addrs);
     }
 }
