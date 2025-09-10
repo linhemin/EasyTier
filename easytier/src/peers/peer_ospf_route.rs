@@ -130,6 +130,8 @@ impl RoutePeerInfo {
             network_length: 24,
             quic_port: None,
             ipv6_addr: None,
+            enable_ipv6_prefix_allocator: None,
+            ipv6_prefixes: Vec::new(),
             groups: Vec::new(),
         }
     }
