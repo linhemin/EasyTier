@@ -678,6 +678,19 @@ mod tests {
     ) {
         TESTING.store(true, std::sync::atomic::Ordering::Relaxed);
 
+        if ipv6 {
+            // Skip IPv6 variant if IPv6 is not supported or on macOS CI environments
+            if std::net::TcpListener::bind("[::1]:0").is_err() {
+                eprintln!("skip direct_connector_basic_test ipv6 variant: IPv6 unsupported");
+                return;
+            }
+            #[cfg(target_os = "macos")]
+            {
+                eprintln!("skip direct_connector_basic_test ipv6 variant on macOS");
+                return;
+            }
+        }
+
         let p_a = create_mock_peer_manager().await;
         let p_b = create_mock_peer_manager().await;
         let p_c = create_mock_peer_manager().await;

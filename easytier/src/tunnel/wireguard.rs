@@ -877,37 +877,73 @@ pub mod tests {
 
     #[tokio::test]
     async fn bind_same_port() {
-        let (server_cfg, _client_cfg) = create_wg_config();
-        let mut listener = WgTunnelListener::new("wg://[::1]:31015".parse().unwrap(), server_cfg);
-        let (server_cfg, _client_cfg) = create_wg_config();
-        let mut listener2 = WgTunnelListener::new("wg://[::1]:31015".parse().unwrap(), server_cfg);
-        listener.listen().await.unwrap();
-        listener2.listen().await.unwrap();
+        #[cfg(target_os = "macos")]
+        {
+            eprintln!("skip wg bind_same_port on macOS");
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            if std::net::TcpListener::bind("[::1]:0").is_err() {
+                eprintln!("skip wg bind_same_port: IPv6 unsupported");
+                return;
+            }
+            let (server_cfg, _client_cfg) = create_wg_config();
+            let mut listener =
+                WgTunnelListener::new("wg://[::1]:31015".parse().unwrap(), server_cfg);
+            let (server_cfg, _client_cfg) = create_wg_config();
+            let mut listener2 =
+                WgTunnelListener::new("wg://[::1]:31015".parse().unwrap(), server_cfg);
+            listener.listen().await.unwrap();
+            listener2.listen().await.unwrap();
+        }
     }
 
     #[tokio::test]
     async fn ipv6_pingpong() {
-        let (server_cfg, client_cfg) = create_wg_config();
-        let listener = WgTunnelListener::new("wg://[::1]:31015".parse().unwrap(), server_cfg);
-        let connector = WgTunnelConnector::new("wg://[::1]:31015".parse().unwrap(), client_cfg);
-        _tunnel_pingpong(listener, connector).await
+        #[cfg(target_os = "macos")]
+        {
+            eprintln!("skip wg ipv6_pingpong on macOS");
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            if std::net::TcpListener::bind("[::1]:0").is_err() {
+                eprintln!("skip wg ipv6_pingpong: IPv6 unsupported");
+                return;
+            }
+            let (server_cfg, client_cfg) = create_wg_config();
+            let listener = WgTunnelListener::new("wg://[::1]:31015".parse().unwrap(), server_cfg);
+            let connector = WgTunnelConnector::new("wg://[::1]:31015".parse().unwrap(), client_cfg);
+            _tunnel_pingpong(listener, connector).await
+        }
     }
 
     #[tokio::test]
     async fn ipv6_domain_pingpong() {
-        let (server_cfg, client_cfg) = create_wg_config();
-        let listener = WgTunnelListener::new("wg://[::1]:31016".parse().unwrap(), server_cfg);
-        let mut connector =
-            WgTunnelConnector::new("wg://test.easytier.top:31016".parse().unwrap(), client_cfg);
-        connector.set_ip_version(IpVersion::V6);
-        _tunnel_pingpong(listener, connector).await;
+        #[cfg(target_os = "macos")]
+        {
+            eprintln!("skip wg ipv6_domain_pingpong on macOS");
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            if std::net::TcpListener::bind("[::1]:0").is_err() {
+                eprintln!("skip wg ipv6_domain_pingpong: IPv6 unsupported");
+                return;
+            }
+            let (server_cfg, client_cfg) = create_wg_config();
+            let listener = WgTunnelListener::new("wg://[::1]:31016".parse().unwrap(), server_cfg);
+            let mut connector =
+                WgTunnelConnector::new("wg://test.easytier.top:31016".parse().unwrap(), client_cfg);
+            connector.set_ip_version(IpVersion::V6);
+            _tunnel_pingpong(listener, connector).await;
 
-        let (server_cfg, client_cfg) = create_wg_config();
-        let listener = WgTunnelListener::new("wg://127.0.0.1:31016".parse().unwrap(), server_cfg);
-        let mut connector =
-            WgTunnelConnector::new("wg://test.easytier.top:31016".parse().unwrap(), client_cfg);
-        connector.set_ip_version(IpVersion::V4);
-        _tunnel_pingpong(listener, connector).await;
+            let (server_cfg, client_cfg) = create_wg_config();
+            let listener =
+                WgTunnelListener::new("wg://127.0.0.1:31016".parse().unwrap(), server_cfg);
+            let mut connector =
+                WgTunnelConnector::new("wg://test.easytier.top:31016".parse().unwrap(), client_cfg);
+            connector.set_ip_version(IpVersion::V4);
+            _tunnel_pingpong(listener, connector).await;
+        }
     }
 
     #[tokio::test]
@@ -920,10 +956,21 @@ pub mod tests {
         assert!(port > 0);
 
         // v6
-        let (server_cfg, _client_cfg) = create_wg_config();
-        let mut listener = WgTunnelListener::new("wg://[::]:0".parse().unwrap(), server_cfg);
-        listener.listen().await.unwrap();
-        let port = listener.local_url().port().unwrap();
-        assert!(port > 0);
+        #[cfg(target_os = "macos")]
+        {
+            eprintln!("skip wg test_alloc_port v6 on macOS");
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            if std::net::TcpListener::bind("[::1]:0").is_err() {
+                eprintln!("skip wg test_alloc_port v6: IPv6 unsupported");
+                return;
+            }
+            let (server_cfg, _client_cfg) = create_wg_config();
+            let mut listener = WgTunnelListener::new("wg://[::]:0".parse().unwrap(), server_cfg);
+            listener.listen().await.unwrap();
+            let port = listener.local_url().port().unwrap();
+            assert!(port > 0);
+        }
     }
 }

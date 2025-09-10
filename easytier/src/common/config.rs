@@ -450,7 +450,10 @@ impl TomlConfigLoader {
         if let Some(table) = value.as_table_mut() {
             // Migrate legacy single prefix into new multi-prefixes
             let has_new = table.contains_key("ipv6_prefixes");
-            let legacy_prefix = table.get("ipv6_onlink_prefix").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let legacy_prefix = table
+                .get("ipv6_onlink_prefix")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
             if !has_new {
                 if let Some(pfx) = legacy_prefix {
                     table.insert(
@@ -604,7 +607,8 @@ impl ConfigLoader for TomlConfigLoader {
     }
 
     fn set_ipv6_prefixes(&self, prefixes: Vec<cidr::Ipv6Cidr>) {
-        self.config.lock().unwrap().ipv6_prefixes = Some(prefixes.into_iter().map(|p| p.to_string()).collect());
+        self.config.lock().unwrap().ipv6_prefixes =
+            Some(prefixes.into_iter().map(|p| p.to_string()).collect());
     }
 
     fn get_enable_ipv6_prefix_allocator(&self) -> bool {

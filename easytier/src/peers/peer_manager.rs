@@ -1112,7 +1112,9 @@ impl PeerManager {
             // if no IPv6 exit nodes are configured or reachable.
             if dst_peers.is_empty() {
                 for exit_node in &self.exit_nodes {
-                    let IpAddr::V4(exit_v4) = exit_node else { continue; };
+                    let IpAddr::V4(exit_v4) = exit_node else {
+                        continue;
+                    };
                     if let Some(peer_id) = self.peers.get_peer_id_by_ipv4(exit_v4).await {
                         dst_peers.push(peer_id);
                         is_exit_node = true;

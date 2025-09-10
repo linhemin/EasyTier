@@ -189,10 +189,18 @@ impl EasyTierLauncher {
                             let host_bits = 128 - pfx_len as u32;
                             let base = prefix.first_address();
                             let mut addr_u128 = u128::from_be_bytes(base.octets());
-                            let mask: u128 = if host_bits == 128 { 0 } else { (!0u128) >> pfx_len };
+                            let mask: u128 = if host_bits == 128 {
+                                0
+                            } else {
+                                (!0u128) >> pfx_len
+                            };
                             let host_part = if host_bits >= 64 {
                                 (h64 as u128) & mask
-                            } else if host_bits == 0 { 0 } else { ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask };
+                            } else if host_bits == 0 {
+                                0
+                            } else {
+                                ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask
+                            };
                             addr_u128 = (addr_u128 & (!mask)) | host_part;
                             let ipv6 = std::net::Ipv6Addr::from(addr_u128.to_be_bytes());
                             assigned_ipv6s.push(cidr::Ipv6Inet::new(ipv6, 128).unwrap().into());
@@ -227,17 +235,27 @@ impl EasyTierLauncher {
                     let prefixes = global_ctx_c.config.get_ipv6_prefixes();
                     if !prefixes.is_empty() {
                         for r in routes.iter() {
-                            if r.inst_id == global_ctx_c.get_id().to_string() { continue; }
+                            if r.inst_id == global_ctx_c.get_id().to_string() {
+                                continue;
+                            }
                             // Require peer to advertise IPv6 prefix allocator and provide prefixes
                             let peer_enable = r.enable_ipv6_prefix_allocator.unwrap_or(false);
-                            if !peer_enable { continue; }
+                            if !peer_enable {
+                                continue;
+                            }
                             let peer_prefix_strs: Vec<String> = r.ipv6_prefixes.clone();
-                            if peer_prefix_strs.is_empty() { continue; }
+                            if peer_prefix_strs.is_empty() {
+                                continue;
+                            }
                             let mut peer_prefixes: Vec<cidr::Ipv6Cidr> = Vec::new();
                             for s in peer_prefix_strs.iter() {
-                                if let Ok(p) = s.parse() { peer_prefixes.push(p); }
+                                if let Ok(p) = s.parse() {
+                                    peer_prefixes.push(p);
+                                }
                             }
-                            if peer_prefixes.is_empty() { continue; }
+                            if peer_prefixes.is_empty() {
+                                continue;
+                            }
                             if let Ok(uuid) = uuid::Uuid::parse_str(&r.inst_id) {
                                 use std::hash::{Hash, Hasher};
                                 let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -249,29 +267,46 @@ impl EasyTierLauncher {
                                     // Only assign if local prefix intersects any of peer's prefixes
                                     let mut ok = false;
                                     for pp in &peer_prefixes {
-                                        let compatible = if prefix.network_length() <= pp.network_length() {
-                                            prefix.contains(&pp.first_address())
-                                        } else {
-                                            pp.contains(&prefix.first_address())
-                                        };
-                                        if compatible { ok = true; break; }
+                                        let compatible =
+                                            if prefix.network_length() <= pp.network_length() {
+                                                prefix.contains(&pp.first_address())
+                                            } else {
+                                                pp.contains(&prefix.first_address())
+                                            };
+                                        if compatible {
+                                            ok = true;
+                                            break;
+                                        }
                                     }
-                                    if !ok { continue 'outer; }
+                                    if !ok {
+                                        continue 'outer;
+                                    }
 
                                     let pfx_len = prefix.network_length();
                                     let host_bits = 128 - pfx_len as u32;
                                     let base = prefix.first_address();
                                     let mut addr_u128 = u128::from_be_bytes(base.octets());
-                                    let mask: u128 = if host_bits == 128 { 0 } else { (!0u128) >> pfx_len };
+                                    let mask: u128 = if host_bits == 128 {
+                                        0
+                                    } else {
+                                        (!0u128) >> pfx_len
+                                    };
                                     let host_part = if host_bits >= 64 {
                                         (h64 as u128) & mask
-                                    } else if host_bits == 0 { 0 } else { ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask };
+                                    } else if host_bits == 0 {
+                                        0
+                                    } else {
+                                        ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask
+                                    };
                                     addr_u128 = (addr_u128 & (!mask)) | host_part;
                                     let ipv6 = std::net::Ipv6Addr::from(addr_u128.to_be_bytes());
                                     addrs.push(cidr::Ipv6Inet::new(ipv6, 128).unwrap().into());
                                 }
                                 if !addrs.is_empty() {
-                                    peer_assigned.push(web::PeerAssignedIpv6{ inst_id: r.inst_id.clone(), addrs });
+                                    peer_assigned.push(web::PeerAssignedIpv6 {
+                                        inst_id: r.inst_id.clone(),
+                                        addrs,
+                                    });
                                 }
                             }
                         }
@@ -483,32 +518,92 @@ impl NetworkInstance {
         let peer_route_pairs = list_peer_route_pair(peers.clone(), routes.clone());
 
         // Build peers' overlay IPv6s for display
+        // Only display IPv6 addresses derived from prefixes that are common between
+        // this node and the peer, and only if the peer advertises IPv6 prefix support.
         let mut peer_assigned_list: Vec<web::PeerAssignedIpv6> = Vec::new();
         let prefixes = self.config.get_ipv6_prefixes();
         if !prefixes.is_empty() {
             for r in routes.iter() {
-                if r.inst_id == self.config.get_id().to_string() { continue; }
+                if r.inst_id == self.config.get_id().to_string() {
+                    continue;
+                }
+
+                // Require peer to advertise IPv6 prefix allocator and provide prefixes
+                let peer_enable = r.enable_ipv6_prefix_allocator.unwrap_or(false);
+                if !peer_enable {
+                    continue;
+                }
+
+                let peer_prefix_strs: Vec<String> = r.ipv6_prefixes.clone();
+                if peer_prefix_strs.is_empty() {
+                    continue;
+                }
+
+                let mut peer_prefixes: Vec<cidr::Ipv6Cidr> = Vec::new();
+                for s in peer_prefix_strs.iter() {
+                    if let Ok(p) = s.parse() {
+                        peer_prefixes.push(p);
+                    }
+                }
+                if peer_prefixes.is_empty() {
+                    continue;
+                }
+
                 if let Ok(uuid) = uuid::Uuid::parse_str(&r.inst_id) {
                     use std::hash::{Hash, Hasher};
                     let mut hasher = std::collections::hash_map::DefaultHasher::new();
                     uuid.as_u128().hash(&mut hasher);
-                    self.config.get_network_identity().network_name.hash(&mut hasher);
+                    self.config
+                        .get_network_identity()
+                        .network_name
+                        .hash(&mut hasher);
                     let h64 = hasher.finish();
+
                     let mut addrs = Vec::new();
-                    for prefix in prefixes.iter() {
+                    'outer: for prefix in prefixes.iter() {
+                        // Only assign if local prefix intersects any of peer's prefixes
+                        let mut ok = false;
+                        for pp in &peer_prefixes {
+                            let compatible = if prefix.network_length() <= pp.network_length() {
+                                prefix.contains(&pp.first_address())
+                            } else {
+                                pp.contains(&prefix.first_address())
+                            };
+                            if compatible {
+                                ok = true;
+                                break;
+                            }
+                        }
+                        if !ok {
+                            continue 'outer;
+                        }
+
                         let pfx_len = prefix.network_length();
                         let host_bits = 128 - pfx_len as u32;
                         let base = prefix.first_address();
                         let mut addr_u128 = u128::from_be_bytes(base.octets());
-                        let mask: u128 = if host_bits == 128 { 0 } else { (!0u128) >> pfx_len };
+                        let mask: u128 = if host_bits == 128 {
+                            0
+                        } else {
+                            (!0u128) >> pfx_len
+                        };
                         let host_part = if host_bits >= 64 {
                             (h64 as u128) & mask
-                        } else if host_bits == 0 { 0 } else { ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask };
+                        } else if host_bits == 0 {
+                            0
+                        } else {
+                            ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask
+                        };
                         addr_u128 = (addr_u128 & (!mask)) | host_part;
                         let ipv6 = std::net::Ipv6Addr::from(addr_u128.to_be_bytes());
                         addrs.push(cidr::Ipv6Inet::new(ipv6, 128).unwrap().into());
                     }
-                    peer_assigned_list.push(web::PeerAssignedIpv6 { inst_id: r.inst_id.clone(), addrs });
+                    if !addrs.is_empty() {
+                        peer_assigned_list.push(web::PeerAssignedIpv6 {
+                            inst_id: r.inst_id.clone(),
+                            addrs,
+                        });
+                    }
                 }
             }
         }

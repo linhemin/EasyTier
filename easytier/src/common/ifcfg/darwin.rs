@@ -117,9 +117,16 @@ impl IfConfiguerTrait for MacIfConfiger {
         cidr_prefix: u8,
         cost: Option<i32>,
     ) -> Result<(), Error> {
-        let target = if cidr_prefix == 0 { "default".to_string() } else { format!("{}/{}", address, cidr_prefix) };
+        let target = if cidr_prefix == 0 {
+            "default".to_string()
+        } else {
+            format!("{}/{}", address, cidr_prefix)
+        };
         let cmd = if let Some(cost) = cost {
-            format!("route -n add -inet6 {} -interface {} -hopcount {}", target, name, cost)
+            format!(
+                "route -n add -inet6 {} -interface {} -hopcount {}",
+                target, name, cost
+            )
         } else {
             format!("route -n add -inet6 {} -interface {}", target, name)
         };
@@ -132,7 +139,12 @@ impl IfConfiguerTrait for MacIfConfiger {
         address: std::net::Ipv6Addr,
         cidr_prefix: u8,
     ) -> Result<(), Error> {
-        let target = if cidr_prefix == 0 { "default".to_string() } else { format!("{}/{}", address, cidr_prefix) };
-        run_shell_cmd(format!("route -n delete -inet6 {} -interface {}", target, name).as_str()).await
+        let target = if cidr_prefix == 0 {
+            "default".to_string()
+        } else {
+            format!("{}/{}", address, cidr_prefix)
+        };
+        run_shell_cmd(format!("route -n delete -inet6 {} -interface {}", target, name).as_str())
+            .await
     }
 }

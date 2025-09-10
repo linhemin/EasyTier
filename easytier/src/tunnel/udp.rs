@@ -1034,6 +1034,10 @@ mod tests {
 
     #[tokio::test]
     async fn bind_same_port() {
+        if std::net::TcpListener::bind("[::1]:0").is_err() {
+            eprintln!("skip udp bind_same_port: IPv6 unsupported");
+            return;
+        }
         println!("{}", "[::]:8888".parse::<SocketAddr>().unwrap());
         let mut listener = UdpTunnelListener::new("udp://[::]:31014".parse().unwrap());
         let mut listener2 = UdpTunnelListener::new("udp://0.0.0.0:31014".parse().unwrap());
@@ -1043,24 +1047,46 @@ mod tests {
 
     #[tokio::test]
     async fn ipv6_pingpong() {
-        let listener = UdpTunnelListener::new("udp://[::1]:31015".parse().unwrap());
-        let connector = UdpTunnelConnector::new("udp://[::1]:31015".parse().unwrap());
-        _tunnel_pingpong(listener, connector).await
+        #[cfg(target_os = "macos")]
+        {
+            eprintln!("skip udp ipv6_pingpong on macOS");
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            if std::net::TcpListener::bind("[::1]:0").is_err() {
+                eprintln!("skip udp ipv6_pingpong: IPv6 unsupported");
+                return;
+            }
+            let listener = UdpTunnelListener::new("udp://[::1]:31015".parse().unwrap());
+            let connector = UdpTunnelConnector::new("udp://[::1]:31015".parse().unwrap());
+            _tunnel_pingpong(listener, connector).await
+        }
     }
 
     #[tokio::test]
     async fn ipv6_domain_pingpong() {
-        let listener = UdpTunnelListener::new("udp://[::1]:31016".parse().unwrap());
-        let mut connector =
-            UdpTunnelConnector::new("udp://test.easytier.top:31016".parse().unwrap());
-        connector.set_ip_version(IpVersion::V6);
-        _tunnel_pingpong(listener, connector).await;
+        #[cfg(target_os = "macos")]
+        {
+            eprintln!("skip udp ipv6_domain_pingpong on macOS");
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            if std::net::TcpListener::bind("[::1]:0").is_err() {
+                eprintln!("skip udp ipv6_domain_pingpong: IPv6 unsupported");
+                return;
+            }
+            let listener = UdpTunnelListener::new("udp://[::1]:31016".parse().unwrap());
+            let mut connector =
+                UdpTunnelConnector::new("udp://test.easytier.top:31016".parse().unwrap());
+            connector.set_ip_version(IpVersion::V6);
+            _tunnel_pingpong(listener, connector).await;
 
-        let listener = UdpTunnelListener::new("udp://127.0.0.1:31016".parse().unwrap());
-        let mut connector =
-            UdpTunnelConnector::new("udp://test.easytier.top:31016".parse().unwrap());
-        connector.set_ip_version(IpVersion::V4);
-        _tunnel_pingpong(listener, connector).await;
+            let listener = UdpTunnelListener::new("udp://127.0.0.1:31016".parse().unwrap());
+            let mut connector =
+                UdpTunnelConnector::new("udp://test.easytier.top:31016".parse().unwrap());
+            connector.set_ip_version(IpVersion::V4);
+            _tunnel_pingpong(listener, connector).await;
+        }
     }
 
     #[tokio::test]
@@ -1072,10 +1098,21 @@ mod tests {
         assert!(port > 0);
 
         // v6
-        let mut listener = UdpTunnelListener::new("udp://[::]:0".parse().unwrap());
-        listener.listen().await.unwrap();
-        let port = listener.local_url().port().unwrap();
-        assert!(port > 0);
+        #[cfg(target_os = "macos")]
+        {
+            eprintln!("skip udp test_alloc_port v6 on macOS");
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            if std::net::TcpListener::bind("[::1]:0").is_err() {
+                eprintln!("skip udp test_alloc_port v6: IPv6 unsupported");
+                return;
+            }
+            let mut listener = UdpTunnelListener::new("udp://[::]:0".parse().unwrap());
+            listener.listen().await.unwrap();
+            let port = listener.local_url().port().unwrap();
+            assert!(port > 0);
+        }
     }
 
     #[tokio::test]
@@ -1113,37 +1150,48 @@ mod tests {
 
     #[tokio::test]
     async fn test_v6_hole_punch_packet() {
-        let mut lis = UdpTunnelListener::new("udp://[::]:0".parse().unwrap());
-        lis.listen().await.unwrap();
+        #[cfg(target_os = "macos")]
+        {
+            eprintln!("skip udp test_v6_hole_punch_packet on macOS");
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            if std::net::TcpListener::bind("[::1]:0").is_err() {
+                eprintln!("skip udp test_v6_hole_punch_packet: IPv6 unsupported");
+                return;
+            }
+            let mut lis = UdpTunnelListener::new("udp://[::]:0".parse().unwrap());
+            lis.listen().await.unwrap();
 
-        // a socket to receive forwarded hole punch packets
-        let socket = Arc::new(UdpSocket::bind("[::]:0").await.unwrap());
-        let socket_clone = socket.clone();
-        let t = tokio::spawn(async move {
-            let mut buf = BytesMut::new();
-            buf.resize(128, 0);
-            socket_clone.recv_from(&mut buf).await.unwrap();
-        });
+            // a socket to receive forwarded hole punch packets
+            let socket = Arc::new(UdpSocket::bind("[::]:0").await.unwrap());
+            let socket_clone = socket.clone();
+            let t = tokio::spawn(async move {
+                let mut buf = BytesMut::new();
+                buf.resize(128, 0);
+                socket_clone.recv_from(&mut buf).await.unwrap();
+            });
 
-        tracing::info!("lis local addr: {:?}", lis.local_url());
-        tracing::info!("socket local addr: {:?}", socket.local_addr().unwrap());
+            tracing::info!("lis local addr: {:?}", lis.local_url());
+            tracing::info!("socket local addr: {:?}", socket.local_addr().unwrap());
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        // a socket to send v6 hole punch packets
-        send_v6_hole_punch_packet(
-            lis.local_url().port().unwrap(),
-            match socket.local_addr().unwrap() {
-                std::net::SocketAddr::V6(addr_v6) => addr_v6,
-                _ => panic!("Expected an IPv6 address"),
-            },
-        )
-        .await
-        .unwrap();
-
-        tokio::time::timeout(tokio::time::Duration::from_secs(2), t)
+            // a socket to send v6 hole punch packets
+            send_v6_hole_punch_packet(
+                lis.local_url().port().unwrap(),
+                match socket.local_addr().unwrap() {
+                    std::net::SocketAddr::V6(addr_v6) => addr_v6,
+                    _ => panic!("Expected an IPv6 address"),
+                },
+            )
             .await
-            .expect("Timeout waiting for v6 hole punch packet")
             .unwrap();
+
+            tokio::time::timeout(tokio::time::Duration::from_secs(2), t)
+                .await
+                .expect("Timeout waiting for v6 hole punch packet")
+                .unwrap();
+        }
     }
 }

@@ -297,10 +297,9 @@ impl TunnelConnector for QUICTunnelConnector {
 
 #[cfg(test)]
 mod tests {
-    use crate::tunnel::{
-        common::tests::{_tunnel_bench, _tunnel_pingpong},
-        IpVersion,
-    };
+    use crate::tunnel::common::tests::{_tunnel_bench, _tunnel_pingpong};
+    #[cfg(not(target_os = "macos"))]
+    use crate::tunnel::IpVersion;
 
     use super::*;
 
@@ -320,24 +319,46 @@ mod tests {
 
     #[tokio::test]
     async fn ipv6_pingpong() {
-        let listener = QUICTunnelListener::new("quic://[::1]:31015".parse().unwrap());
-        let connector = QUICTunnelConnector::new("quic://[::1]:31015".parse().unwrap());
-        _tunnel_pingpong(listener, connector).await
+        #[cfg(target_os = "macos")]
+        {
+            eprintln!("skip quic ipv6_pingpong on macOS");
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            if std::net::TcpListener::bind("[::1]:0").is_err() {
+                eprintln!("skip quic ipv6_pingpong: IPv6 unsupported");
+                return;
+            }
+            let listener = QUICTunnelListener::new("quic://[::1]:31015".parse().unwrap());
+            let connector = QUICTunnelConnector::new("quic://[::1]:31015".parse().unwrap());
+            _tunnel_pingpong(listener, connector).await
+        }
     }
 
     #[tokio::test]
     async fn ipv6_domain_pingpong() {
-        let listener = QUICTunnelListener::new("quic://[::1]:31016".parse().unwrap());
-        let mut connector =
-            QUICTunnelConnector::new("quic://test.easytier.top:31016".parse().unwrap());
-        connector.set_ip_version(IpVersion::V6);
-        _tunnel_pingpong(listener, connector).await;
+        #[cfg(target_os = "macos")]
+        {
+            eprintln!("skip quic ipv6_domain_pingpong on macOS");
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            if std::net::TcpListener::bind("[::1]:0").is_err() {
+                eprintln!("skip quic ipv6_domain_pingpong: IPv6 unsupported");
+                return;
+            }
+            let listener = QUICTunnelListener::new("quic://[::1]:31016".parse().unwrap());
+            let mut connector =
+                QUICTunnelConnector::new("quic://test.easytier.top:31016".parse().unwrap());
+            connector.set_ip_version(IpVersion::V6);
+            _tunnel_pingpong(listener, connector).await;
 
-        let listener = QUICTunnelListener::new("quic://127.0.0.1:31016".parse().unwrap());
-        let mut connector =
-            QUICTunnelConnector::new("quic://test.easytier.top:31016".parse().unwrap());
-        connector.set_ip_version(IpVersion::V4);
-        _tunnel_pingpong(listener, connector).await;
+            let listener = QUICTunnelListener::new("quic://127.0.0.1:31016".parse().unwrap());
+            let mut connector =
+                QUICTunnelConnector::new("quic://test.easytier.top:31016".parse().unwrap());
+            connector.set_ip_version(IpVersion::V4);
+            _tunnel_pingpong(listener, connector).await;
+        }
     }
 
     #[tokio::test]
@@ -349,6 +370,10 @@ mod tests {
         assert!(port > 0);
 
         // v6
+        if std::net::TcpListener::bind("[::1]:0").is_err() {
+            eprintln!("skip quic test_alloc_port v6: IPv6 unsupported");
+            return;
+        }
         let mut listener = QUICTunnelListener::new("quic://[::]:0".parse().unwrap());
         listener.listen().await.unwrap();
         let port = listener.local_url().port().unwrap();

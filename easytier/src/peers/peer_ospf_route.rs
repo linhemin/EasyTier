@@ -174,7 +174,9 @@ impl RoutePeerInfo {
 
             quic_port: global_ctx.get_quic_proxy_port().map(|x| x as u32),
             ipv6_addr: global_ctx.get_ipv6().map(|x| x.into()),
-            enable_ipv6_prefix_allocator: Some(global_ctx.config.get_enable_ipv6_prefix_allocator()),
+            enable_ipv6_prefix_allocator: Some(
+                global_ctx.config.get_enable_ipv6_prefix_allocator(),
+            ),
             ipv6_prefixes: {
                 let pfxs = global_ctx.config.get_ipv6_prefixes();
                 pfxs.into_iter().map(|p| p.to_string()).collect()
