@@ -1,4 +1,4 @@
-use std::{
+﻿use std::{
     collections::BTreeSet,
     io,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
@@ -34,6 +34,7 @@ use tokio::{
 };
 use tokio_util::bytes::Bytes;
 use tun::{AbstractDevice, AsyncDevice, Configuration, Layer};
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use crate::common::ifcfg as ifcfg;
 use zerocopy::{NativeEndian, NetworkEndian};
 
@@ -907,7 +908,7 @@ impl NicCtx {
         let net_ns = self.global_ctx.net_ns.clone();
         let nic = self.nic.lock().await;
         let ifcfg = nic.get_ifcfg();
-        let tun_ifname = nic.ifname().to_owned();
+        let _tun_ifname = nic.ifname().to_owned();
         drop(nic);
 
         // Only run if allocator is enabled, TUN is used, and at least one prefix provided.
@@ -981,13 +982,13 @@ impl NicCtx {
                 for ip in removed.iter() {
                     let _g = net_ns.guard();
                     // remove route on tun
-                    let _ = ifcfg.remove_ipv6_route(&tun_ifname, *ip, 128).await;
+                    let _ = ifcfg.remove_ipv6_route(&_tun_ifname, *ip, 128).await;
                 }
                 // additions
                 for ip in new_set.iter() {
                     if applied_guard.contains(ip) { continue; }
                     let _g = net_ns.guard();
-                    let _ = ifcfg.add_ipv6_route(&tun_ifname, *ip, 128, None).await;
+                    let _ = ifcfg.add_ipv6_route(&_tun_ifname, *ip, 128, None).await;
                 }
                 *applied_guard = new_set;
                 drop(applied_guard);
@@ -1039,7 +1040,7 @@ impl NicCtx {
         }
 
         let nic = self.nic.lock().await;
-        let tun_ifname = nic.ifname().to_owned();
+        let _tun_ifname = nic.ifname().to_owned();
         drop(nic);
 
         #[cfg(target_os = "linux")]
@@ -1057,7 +1058,7 @@ impl NicCtx {
                    # Fallback: MASQUERADE everything not going out via TUN (broad, but functional)
                    ip6tables -t nat -C POSTROUTING ! -o {} -j MASQUERADE || ip6tables -t nat -A POSTROUTING ! -o {} -j MASQUERADE; \
                  fi",
-                tun_ifname, tun_ifname, tun_ifname, tun_ifname, tun_ifname, tun_ifname
+                _tun_ifname, _tun_ifname, _tun_ifname, _tun_ifname, _tun_ifname, _tun_ifname
             );
             let _ = ifcfg::run_shell_cmd(&cmd).await;
         }
@@ -1222,3 +1223,4 @@ mod tests {
         // }
     }
 }
+

@@ -125,14 +125,19 @@ function ipv6AddrToBigInt(ip: { part1: number, part2: number, part3: number, par
     + BigInt(ip.part4)
 }
 
+// In backend, assigned IPv6s are /128 derived from configured prefixes.
+// We don't have the original prefix length here, so we use a heuristic set
+// of common IPv6 prefix lengths (64, 56, 48) to decide whether two /128
+// addresses belong to the same configured prefix.
 function samePrefix(a: { address: any, network_length: number }, b: { address: any, network_length: number }): boolean {
-  if (a.network_length !== b.network_length) return false
-  const len = a.network_length
-  if (len <= 0) return true
-  const mask = len === 128 ? (BigInt(-1)) : (~((BigInt(1) << BigInt(128 - len)) - BigInt(1)))
   const av = ipv6AddrToBigInt(a.address)
   const bv = ipv6AddrToBigInt(b.address)
-  return (av & mask) === (bv & mask)
+  const lens = [64, 56, 48]
+  for (const len of lens) {
+    const mask = len === 0 ? BigInt(0) : (~((BigInt(1) << BigInt(128 - len)) - BigInt(1)))
+    if ((av & mask) === (bv & mask)) return true
+  }
+  return false
 }
 
 function peerIpv6ListForRow(row: PeerRoutePair): string {
@@ -144,7 +149,9 @@ function peerIpv6ListForRow(row: PeerRoutePair): string {
   const filtered = mine.length > 0
     ? peerList.filter(p => mine.some(m => samePrefix(p, m)))
     : peerList
-  const shown = filtered.map(ipv6InetToCompressedString)
+  // Fallback: if heuristic filter produced nothing, show all peer addresses
+  const chosen = filtered.length > 0 ? filtered : peerList
+  const shown = chosen.map(ipv6InetToCompressedString)
   return shown.join(', ')
 }
 
@@ -178,9 +185,9 @@ const myNodeInfoChips = computed(() => {
     } as Chip)
   }
 
-  // virtual ipv4
+  // virtual ip (v4)
   chips.push({
-    label: `Virtual IPv4: ${ipv4InetToString(my_node_info.virtual_ipv4)}`,
+    label: `Virtual IP: ${ipv4InetToString(my_node_info.virtual_ipv4)}`,
     icon: '',
   } as Chip)
 
