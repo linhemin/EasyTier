@@ -228,13 +228,16 @@ impl EasyTierLauncher {
                     if !prefixes.is_empty() {
                         for r in routes.iter() {
                             if r.inst_id == global_ctx_c.get_id().to_string() { continue; }
-                            // Require peer to advertise an IPv6 network before deriving any address
-                            let peer_inet = match &r.ipv6_addr {
-                                Some(v) => Some(cidr::Ipv6Inet::from(v.clone())),
-                                None => None,
-                            };
-                            if peer_inet.is_none() { continue; }
-                            let peer_inet = peer_inet.unwrap();
+                            // Require peer to advertise IPv6 prefix allocator and provide prefixes
+                            let peer_enable = r.enable_ipv6_prefix_allocator.unwrap_or(false);
+                            if !peer_enable { continue; }
+                            let peer_prefix_strs: Vec<String> = r.ipv6_prefixes.clone();
+                            if peer_prefix_strs.is_empty() { continue; }
+                            let mut peer_prefixes: Vec<cidr::Ipv6Cidr> = Vec::new();
+                            for s in peer_prefix_strs.iter() {
+                                if let Ok(p) = s.parse() { peer_prefixes.push(p); }
+                            }
+                            if peer_prefixes.is_empty() { continue; }
                             if let Ok(uuid) = uuid::Uuid::parse_str(&r.inst_id) {
                                 use std::hash::{Hash, Hasher};
                                 let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -242,19 +245,18 @@ impl EasyTierLauncher {
                                 global_ctx_c.get_network_name().hash(&mut hasher);
                                 let h64 = hasher.finish();
                                 let mut addrs = Vec::new();
-                                for prefix in prefixes.iter() {
-                                    // Only assign if local prefix and peer's IPv6 network are compatible (containment or equal)
-                                    let peer_cidr = cidr::Ipv6Cidr::new(
-                                        peer_inet.address(),
-                                        peer_inet.network_length() as u8,
-                                    )
-                                    .unwrap();
-                                    let compatible = if prefix.network_length() <= peer_inet.network_length() as u8 {
-                                        prefix.contains(&peer_inet.address())
-                                    } else {
-                                        peer_cidr.contains(&prefix.first_address())
-                                    };
-                                    if !compatible { continue; }
+                                'outer: for prefix in prefixes.iter() {
+                                    // Only assign if local prefix intersects any of peer's prefixes
+                                    let mut ok = false;
+                                    for pp in &peer_prefixes {
+                                        let compatible = if prefix.network_length() <= pp.network_length() {
+                                            prefix.contains(&pp.first_address())
+                                        } else {
+                                            pp.contains(&prefix.first_address())
+                                        };
+                                        if compatible { ok = true; break; }
+                                    }
+                                    if !ok { continue 'outer; }
 
                                     let pfx_len = prefix.network_length();
                                     let host_bits = 128 - pfx_len as u32;

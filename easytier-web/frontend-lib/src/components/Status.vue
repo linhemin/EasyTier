@@ -140,23 +140,20 @@ function samePrefix(a: { address: any, network_length: number }, b: { address: a
   return false
 }
 
-function peerIpv6ListForRow(row: PeerRoutePair): string {
+function peerIpv6ArrayForRow(row: PeerRoutePair): string[] {
   const detail = props.curNetworkInst?.detail
-  if (!detail) return ''
-  const my = detail.my_node_info
-  const mine = my.assigned_ipv6s || []
+  if (!detail) return []
+  // Self row (no inst_id) -> show my own assigned IPv6s
+  if (!row.route.inst_id) {
+    const mine = detail.my_node_info?.assigned_ipv6s || []
+    return mine.map(inet => ipv6AddrToCompressedString(inet.address))
+  }
+  // Peer row -> use back-end prepared list for that inst_id
   const peerList = (detail.peer_assigned_ipv6s || []).find(p => p.inst_id === row.route.inst_id)?.addrs || []
-  const filtered = mine.length > 0
-    ? peerList.filter(p => mine.some(m => samePrefix(p, m)))
-    : peerList
-  // Fallback: if heuristic filter produced nothing, show all peer addresses
-  const chosen = filtered.length > 0 ? filtered : peerList
-  const shown = chosen.map(inet => ipv6AddrToCompressedString(inet.address))
-  return shown.join('\n')
+  return peerList.map(inet => ipv6AddrToCompressedString(inet.address))
 }
 
-async function copyPeerIpv6(row: PeerRoutePair) {
-  const text = peerIpv6ListForRow(row)
+async function copyOneIpv6(text: string) {
   try {
     if (navigator && navigator.clipboard) await navigator.clipboard.writeText(text)
   } catch { /* ignore */ }
@@ -453,14 +450,17 @@ function showEventLogs() {
               <template #body="slotProps">
                 <div class="flex flex-col">
                   <div>{{ ipFormat(slotProps.data) }}</div>
-                  <div
-                    v-if="peerIpv6ListForRow(slotProps.data)"
-                    class="text-xs overflow-hidden text-color-secondary cursor-pointer whitespace-pre-line"
-                    v-tooltip="peerIpv6ListForRow(slotProps.data)"
-                    @click="copyPeerIpv6(slotProps.data)"
-                  >
-                    {{ peerIpv6ListForRow(slotProps.data) }}
-                  </div>
+                  <template v-if="peerIpv6ArrayForRow(slotProps.data).length">
+                    <div
+                      v-for="(addr, i) in peerIpv6ArrayForRow(slotProps.data)"
+                      :key="i"
+                      class="text-xs overflow-hidden text-color-secondary cursor-pointer"
+                      v-tooltip="addr"
+                      @click="copyOneIpv6(addr)"
+                    >
+                      {{ addr }}
+                    </div>
+                  </template>
                 </div>
               </template>
             </Column>

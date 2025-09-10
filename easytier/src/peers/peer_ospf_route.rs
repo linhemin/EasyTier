@@ -228,6 +228,11 @@ impl From<RoutePeerInfo> for crate::proto::cli::Route {
             path_latency_latency_first: None,
 
             ipv6_addr: val.ipv6_addr,
+            enable_ipv6_prefix_allocator: Some(global_ctx.config.get_enable_ipv6_prefix_allocator()),
+            ipv6_prefixes: {
+                let pfxs = global_ctx.config.get_ipv6_prefixes();
+                pfxs.into_iter().map(|p| p.to_string()).collect()
+            },
         }
     }
 }

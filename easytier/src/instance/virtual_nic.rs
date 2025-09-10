@@ -930,12 +930,14 @@ impl NicCtx {
                 let routes = peer_mgr.list_routes().await;
                 for r in routes {
                     if r.inst_id == my_inst_id { continue; }
-                    // Only derive if peer advertised an IPv6 prefix and it is compatible with our local prefix
-                    let peer_inet = match &r.ipv6_addr {
-                        Some(v) => Some(cidr::Ipv6Inet::from(v.clone())),
-                        None => None,
-                    };
-                    let Some(peer_inet) = peer_inet else { continue; };
+                    // Only derive if peer advertised allocator + prefixes; use intersection
+                    let peer_enable = r.enable_ipv6_prefix_allocator.unwrap_or(false);
+                    if !peer_enable { continue; }
+                    let peer_prefix_strs: Vec<String> = r.ipv6_prefixes.clone();
+                    if peer_prefix_strs.is_empty() { continue; }
+                    let mut peer_prefixes: Vec<cidr::Ipv6Cidr> = Vec::new();
+                    for s in peer_prefix_strs.iter() { if let Ok(p) = s.parse() { peer_prefixes.push(p); } }
+                    if peer_prefixes.is_empty() { continue; }
 
                     // derive v6 from inst_id + prefix when compatible
                     let Ok(uuid) = uuid::Uuid::parse_str(&r.inst_id) else { continue; };
@@ -945,13 +947,17 @@ impl NicCtx {
                     global_ctx.get_network_name().hash(&mut hasher);
                     let h64 = hasher.finish();
                     for prefix in &prefixes {
-                        let peer_cidr = cidr::Ipv6Cidr::new(peer_inet.address(), peer_inet.network_length() as u8).unwrap();
-                        let compatible = if prefix.network_length() <= peer_inet.network_length() as u8 {
-                            prefix.contains(&peer_inet.address())
-                        } else {
-                            peer_cidr.contains(&prefix.first_address())
-                        };
-                        if !compatible { continue; }
+                        // Check intersection with any peer prefix
+                        let mut ok = false;
+                        for pp in &peer_prefixes {
+                            let compatible = if prefix.network_length() <= pp.network_length() {
+                                prefix.contains(&pp.first_address())
+                            } else {
+                                pp.contains(&prefix.first_address())
+                            };
+                            if compatible { ok = true; break; }
+                        }
+                        if !ok { continue; }
 
                         let pfx_len = prefix.network_length();
                         let host_bits = 128 - pfx_len as u32;
