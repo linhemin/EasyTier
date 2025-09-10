@@ -332,3 +332,4 @@ web:
     logout: Logout
 ipv6_prefix_allocator: IPv6 Prefix Assignment
 ipv6_prefixes: IPv6 Prefixes
+requires_tun: Requires TUN interface

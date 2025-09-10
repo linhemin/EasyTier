@@ -164,6 +164,15 @@ const myNodeInfoChips = computed(() => {
     } as Chip)
   }
 
+  // overlay assigned ipv6s
+  const assigned = my_node_info.assigned_ipv6s
+  for (const [idx, inet] of assigned?.entries() || []) {
+    chips.push({
+      label: `Overlay IPv6 ${idx}: ${ipv6ToString(inet.address)}/${inet.network_length}`,
+      icon: '',
+    } as Chip)
+  }
+
   // public ip
   const public_ip = my_node_info.ips?.public_ipv4
   if (public_ip) {

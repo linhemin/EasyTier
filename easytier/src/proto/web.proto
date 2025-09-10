@@ -97,6 +97,8 @@ message MyNodeInfo {
   common.StunInfo stun_info = 5;
   repeated common.Url listeners = 6;
   optional string vpn_portal_cfg = 7;
+  // overlay IPv6 addresses assigned via prefix assignment
+  repeated common.Ipv6Inet assigned_ipv6s = 8;
 }
 
 message NetworkInstanceRunningInfo {

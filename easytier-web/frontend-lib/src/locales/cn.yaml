@@ -332,3 +332,4 @@ web:
     logout: 退出登录
 ipv6_prefix_allocator: IPv6 前缀分配
 ipv6_prefixes: IPv6 前缀列表
+requires_tun: 需要启用 TUN 接口

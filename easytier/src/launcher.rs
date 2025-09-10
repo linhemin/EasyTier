@@ -175,6 +175,30 @@ impl EasyTierLauncher {
                     *data_c.tun_dev_name.write().unwrap() =
                         global_ctx_c.get_flags().dev_name.clone();
 
+                    // build overlay assigned ipv6s per configured prefixes
+                    let mut assigned_ipv6s = Vec::new();
+                    let prefixes = global_ctx_c.config.get_ipv6_prefixes();
+                    if !prefixes.is_empty() {
+                        use std::hash::{Hash, Hasher};
+                        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                        global_ctx_c.get_id().as_u128().hash(&mut hasher);
+                        global_ctx_c.get_network_name().hash(&mut hasher);
+                        let h64 = hasher.finish();
+                        for prefix in prefixes.iter() {
+                            let pfx_len = prefix.network_length();
+                            let host_bits = 128 - pfx_len as u32;
+                            let base = prefix.first_address();
+                            let mut addr_u128 = u128::from_be_bytes(base.octets());
+                            let mask: u128 = if host_bits == 128 { 0 } else { (!0u128) >> pfx_len };
+                            let host_part = if host_bits >= 64 {
+                                (h64 as u128) & mask
+                            } else if host_bits == 0 { 0 } else { ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask };
+                            addr_u128 = (addr_u128 & (!mask)) | host_part;
+                            let ipv6 = std::net::Ipv6Addr::from(addr_u128.to_be_bytes());
+                            assigned_ipv6s.push(cidr::Ipv6Inet::new(ipv6, 128).unwrap().into());
+                        }
+                    }
+
                     let node_info = MyNodeInfo {
                         virtual_ipv4: global_ctx_c.get_ipv4().map(|ip| ip.into()),
                         hostname: global_ctx_c.get_hostname(),
@@ -193,6 +217,7 @@ impl EasyTierLauncher {
                                 .dump_client_config(peer_mgr_c.clone())
                                 .await,
                         ),
+                        assigned_ipv6s,
                     };
                     *data_c.my_node_info.write().unwrap() = node_info.clone();
                     *data_c.routes.write().unwrap() = peer_mgr_c.list_routes().await;

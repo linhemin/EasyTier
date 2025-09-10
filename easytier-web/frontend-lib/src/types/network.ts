@@ -212,6 +212,7 @@ export interface NodeInfo {
   stun_info: StunInfo
   listeners: Url[]
   vpn_portal_cfg?: string
+  assigned_ipv6s?: Ipv6Inet[]
 }
 
 export interface StunInfo {

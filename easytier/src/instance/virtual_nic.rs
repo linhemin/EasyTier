@@ -893,7 +893,8 @@ impl NicCtx {
         let tun_ifname = nic.ifname().to_owned();
         drop(nic);
 
-        // Only run if allocator is enabled and at least one prefix provided.
+        // Only run if allocator is enabled, TUN is used, and at least one prefix provided.
+        if global_ctx.get_flags().no_tun { return Ok(()); }
         if !global_ctx.config.get_enable_ipv6_onlink_allocator() {
             return Ok(());
         }
@@ -934,12 +935,25 @@ impl NicCtx {
                     }
                 }
 
-                // Also include the gateway's own TUN IPv6 if it falls into any configured prefix
-                if let Some(my_v6) = global_ctx.get_ipv6() {
+                // Also include this node's assigned IPv6s for all prefixes
+                {
+                    use std::hash::{Hash, Hasher};
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    global_ctx.get_id().as_u128().hash(&mut hasher);
+                    global_ctx.get_network_name().hash(&mut hasher);
+                    let h64 = hasher.finish();
                     for prefix in &prefixes {
-                        if prefix.contains(&my_v6.address()) {
-                            new_set.insert(my_v6.address());
-                        }
+                        let pfx_len = prefix.network_length();
+                        let host_bits = 128 - pfx_len as u32;
+                        let base = prefix.first_address();
+                        let mut addr_u128 = u128::from_be_bytes(base.octets());
+                        let mask: u128 = if host_bits == 128 { 0 } else { (!0u128) >> pfx_len };
+                        let host_part = if host_bits >= 64 {
+                            (h64 as u128) & mask
+                        } else if host_bits == 0 { 0 } else { ((h64 as u128) & ((1u128 << host_bits) - 1)) & mask };
+                        addr_u128 = (addr_u128 & (!mask)) | host_part;
+                        let ipv6 = std::net::Ipv6Addr::from(addr_u128.to_be_bytes());
+                        new_set.insert(ipv6);
                     }
                 }
 
