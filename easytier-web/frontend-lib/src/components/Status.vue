@@ -4,7 +4,7 @@ import { IPv4 } from 'ip-num/IPNumber'
 import { NetworkInstance, type NodeInfo, type PeerRoutePair } from '../types/network'
 import { useI18n } from 'vue-i18n';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { ipv4InetToString, ipv4ToString, ipv6ToString, ipv6InetToCompressedString, ipv6AddrToCompressedString } from '../modules/utils';
+import { ipv4InetToString, ipv4ToString, ipv6ToString, ipv6AddrToCompressedString } from '../modules/utils';
 import { DataTable, Column, Tag, Chip, Button, Dialog, ScrollPanel, Timeline, Divider, Card, } from 'primevue';
 
 const props = defineProps<{
