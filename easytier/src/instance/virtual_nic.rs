@@ -940,7 +940,7 @@ impl NicCtx {
                         let pfx_len = prefix.network_length();
                         let host_bits = 128 - pfx_len as u32;
                         let base = prefix.first_address();
-                        let mut oct = base.octets();
+                        let oct = base.octets();
                         let mut addr_u128 = u128::from_be_bytes(oct);
                         let mask: u128 = if host_bits == 128 { 0 } else { (!0u128) >> pfx_len };
                         let host_part = if host_bits >= 64 {

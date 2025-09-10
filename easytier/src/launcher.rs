@@ -463,7 +463,7 @@ impl NetworkInstance {
         let prefixes = self.config.get_ipv6_prefixes();
         if !prefixes.is_empty() {
             for r in routes.iter() {
-                if r.inst_id == self.get_id().to_string() { continue; }
+                if r.inst_id == self.config.get_id().to_string() { continue; }
                 if let Ok(uuid) = uuid::Uuid::parse_str(&r.inst_id) {
                     use std::hash::{Hash, Hasher};
                     let mut hasher = std::collections::hash_map::DefaultHasher::new();

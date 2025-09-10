@@ -135,7 +135,7 @@ impl GlobalCtx {
         let no_tun = config_fs.get_flags().no_tun;
 
         // Initialize feature flags from config
-        let mut feature_flags = PeerFeatureFlag {
+        let feature_flags = PeerFeatureFlag {
             kcp_input: !config_fs.get_flags().disable_kcp_input,
             no_relay_kcp: config_fs.get_flags().disable_relay_kcp,
             ..Default::default()

@@ -335,7 +335,7 @@ impl Instance {
                 let host_bits = 128 - pfx_len as u32;
                 // construct base from prefix network
                 let base = prefix.first_address();
-                let mut oct = base.octets();
+                let oct = base.octets();
                 // build u128 from octets
                 let mut addr_u128 = u128::from_be_bytes(oct);
                 // mask out host bits
